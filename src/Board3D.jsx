@@ -6,6 +6,18 @@ import { canPlayInBoard, indexToCoords, isBoardResolved } from "./gameLogic";
 const BASE_LOCAL_BOARD_SPAN = 3;
 const MIN_CELL_SIZE = 0.18;
 const MAX_CELL_SIZE = 1;
+const PALETTE = {
+  x: "#f43f5e",
+  o: "#14b8a6",
+  boardActive: "#fef3c7",
+  boardInactive: "#e2e8f0",
+  boardResolved: "#ddd6fe",
+  lineLocal: "#c4b5fd",
+  lineMeta: "#e9d5ff",
+  blobOne: "#f9a8d4",
+  blobTwo: "#93c5fd",
+  blobThree: "#86efac",
+};
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
@@ -33,25 +45,51 @@ const XMark = ({ x, y, cellSize }) => {
   const depth = Math.max(cellSize * 0.1, 0.06);
 
   return (
-  <group position={[x, y, 0.08]}>
-    <mesh rotation={[0, 0, Math.PI / 4]}>
-      <boxGeometry args={[length, thickness, depth]} />
-      <meshStandardMaterial color="#f97316" />
-    </mesh>
-    <mesh rotation={[0, 0, -Math.PI / 4]}>
-      <boxGeometry args={[length, thickness, depth]} />
-      <meshStandardMaterial color="#f97316" />
-    </mesh>
-  </group>
+    <group position={[x, y, 0.08]}>
+      <mesh rotation={[0, 0, Math.PI / 4]}>
+        <boxGeometry args={[length, thickness, depth]} />
+        <meshStandardMaterial color={PALETTE.x} emissive="#fb7185" emissiveIntensity={0.2} />
+      </mesh>
+      <mesh rotation={[0, 0, -Math.PI / 4]}>
+        <boxGeometry args={[length, thickness, depth]} />
+        <meshStandardMaterial color={PALETTE.x} emissive="#fb7185" emissiveIntensity={0.2} />
+      </mesh>
+    </group>
   );
 };
 
 const OMark = ({ x, y, cellSize }) => (
   <mesh position={[x, y, 0.08]}>
     <torusGeometry args={[cellSize * 0.28, Math.max(cellSize * 0.08, 0.03), 16, 32]} />
-    <meshStandardMaterial color="#2563eb" />
+    <meshStandardMaterial color={PALETTE.o} emissive="#5eead4" emissiveIntensity={0.2} />
   </mesh>
 );
+
+const FuzzyBackdrop = ({ totalSpan }) => {
+  const radius = clamp(totalSpan * 0.1, 2.4, 15);
+  const offset = clamp(totalSpan * 0.35, 4.5, 46);
+  const z = -clamp(totalSpan * 0.24, 5, 30);
+  const blobs = [
+    { position: [-offset, offset * 0.4, z], color: PALETTE.blobOne, scale: 1.25 },
+    { position: [offset * 0.25, offset * 0.7, z - 2], color: PALETTE.blobTwo, scale: 1.45 },
+    { position: [offset, -offset * 0.4, z - 1], color: PALETTE.blobThree, scale: 1.18 },
+  ];
+
+  return blobs.map((blob, index) => (
+    <mesh key={`blob-${index}`} position={blob.position}>
+      <sphereGeometry args={[radius * blob.scale, 28, 28]} />
+      <meshStandardMaterial
+        color={blob.color}
+        transparent
+        opacity={0.24}
+        roughness={1}
+        metalness={0}
+        emissive={blob.color}
+        emissiveIntensity={0.16}
+      />
+    </mesh>
+  ));
+};
 
 const BoardScene = ({ game, onCellClick, layout }) => {
   const size = game.size;
@@ -72,8 +110,16 @@ const BoardScene = ({ game, onCellClick, layout }) => {
 
   return (
     <>
-      <ambientLight intensity={0.7} />
-      <directionalLight position={[1.5, 2, 8]} intensity={0.8} />
+      <hemisphereLight args={["#fff7ed", "#dbeafe", 0.74]} />
+      <ambientLight intensity={0.63} />
+      <directionalLight position={[1.5, 2, 8]} intensity={0.76} />
+      <pointLight position={[totalSpan * 0.2, totalSpan * 0.24, 11]} intensity={0.5} color="#f9a8d4" />
+      <pointLight
+        position={[-totalSpan * 0.24, -totalSpan * 0.26, 12]}
+        intensity={0.44}
+        color="#a7f3d0"
+      />
+      <FuzzyBackdrop totalSpan={totalSpan} />
 
       {game.boards.map((board, boardIndex) => {
         const center = boardCenters[boardIndex];
@@ -82,24 +128,37 @@ const BoardScene = ({ game, onCellClick, layout }) => {
 
         let boardOverlayColor = null;
         if (board.winner === "X") {
-          boardOverlayColor = "#14532d";
+          boardOverlayColor = "#fecdd3";
         } else if (board.winner === "O") {
-          boardOverlayColor = "#1e3a8a";
+          boardOverlayColor = "#bfdbfe";
         } else if (board.isDraw) {
-          boardOverlayColor = "#334155";
+          boardOverlayColor = "#ddd6fe";
         }
+
+        const boardColor = boardResolved
+          ? PALETTE.boardResolved
+          : boardPlayable && !gameOver
+            ? PALETTE.boardActive
+            : PALETTE.boardInactive;
 
         return (
           <group key={`board-${boardIndex}`}>
+            {boardPlayable && !boardResolved && !gameOver ? (
+              <mesh position={[center.x, center.y, -0.03]}>
+                <planeGeometry args={[boardSpan + lineThickness * 1.6, boardSpan + lineThickness * 1.6]} />
+                <meshStandardMaterial color="#fde68a" transparent opacity={0.24} />
+              </mesh>
+            ) : null}
+
             <mesh position={[center.x, center.y, -0.04]}>
               <planeGeometry args={[boardSpan, boardSpan]} />
-              <meshStandardMaterial color="#0f172a" roughness={0.9} />
+              <meshStandardMaterial color={boardColor} roughness={0.95} metalness={0.02} />
             </mesh>
 
             {boardOverlayColor ? (
               <mesh position={[center.x, center.y, 0.03]}>
                 <planeGeometry args={[boardSpan - lineThickness, boardSpan - lineThickness]} />
-                <meshStandardMaterial color={boardOverlayColor} transparent opacity={0.28} />
+                <meshStandardMaterial color={boardOverlayColor} transparent opacity={0.35} />
               </mesh>
             ) : null}
 
@@ -109,11 +168,11 @@ const BoardScene = ({ game, onCellClick, layout }) => {
                 <group key={`local-lines-${boardIndex}-${lineIndex}`}>
                   <mesh position={[center.x + offset, center.y, 0.04]}>
                     <boxGeometry args={[lineThickness, boardSpan, lineThickness]} />
-                    <meshStandardMaterial color="#475569" />
+                    <meshStandardMaterial color={PALETTE.lineLocal} />
                   </mesh>
                   <mesh position={[center.x, center.y - offset, 0.04]}>
                     <boxGeometry args={[boardSpan, lineThickness, lineThickness]} />
-                    <meshStandardMaterial color="#475569" />
+                    <meshStandardMaterial color={PALETTE.lineLocal} />
                   </mesh>
                 </group>
               );
@@ -124,17 +183,17 @@ const BoardScene = ({ game, onCellClick, layout }) => {
               const x = center.x + (col - boardCenterOffset) * cellSize;
               const y = center.y + (boardCenterOffset - row) * cellSize;
 
-              let cellColor = "#e2e8f0";
+              let cellColor = "#fff7ed";
               if (!boardPlayable && !boardResolved && !gameOver) {
-                cellColor = "#94a3b8";
+                cellColor = "#e2e8f0";
               }
               if (boardResolved) {
                 if (board.winner === "X") {
-                  cellColor = "#bbf7d0";
+                  cellColor = "#fecdd3";
                 } else if (board.winner === "O") {
                   cellColor = "#bfdbfe";
                 } else {
-                  cellColor = "#cbd5e1";
+                  cellColor = "#ddd6fe";
                 }
               }
 
@@ -153,7 +212,13 @@ const BoardScene = ({ game, onCellClick, layout }) => {
                     }}
                   >
                     <planeGeometry args={[cellSize * 0.92, cellSize * 0.92]} />
-                    <meshStandardMaterial color={cellColor} roughness={0.9} metalness={0.05} />
+                    <meshStandardMaterial
+                      color={cellColor}
+                      roughness={0.88}
+                      metalness={0.02}
+                      emissive="#ffffff"
+                      emissiveIntensity={0.03}
+                    />
                   </mesh>
 
                   {cellValue === "X" ? <XMark x={x} y={y} cellSize={cellSize} /> : null}
@@ -171,11 +236,11 @@ const BoardScene = ({ game, onCellClick, layout }) => {
           <group key={`meta-lines-${lineIndex}`}>
             <mesh position={[offset, 0, 0.07]}>
               <boxGeometry args={[lineThickness * 2, totalSpan, lineThickness * 2]} />
-              <meshStandardMaterial color="#f8fafc" />
+              <meshStandardMaterial color={PALETTE.lineMeta} />
             </mesh>
             <mesh position={[0, -offset, 0.07]}>
               <boxGeometry args={[totalSpan, lineThickness * 2, lineThickness * 2]} />
-              <meshStandardMaterial color="#f8fafc" />
+              <meshStandardMaterial color={PALETTE.lineMeta} />
             </mesh>
           </group>
         );
@@ -197,7 +262,8 @@ const Board3D = ({ game, onCellClick }) => {
         key={`board-canvas-${game.size}`}
         camera={{ position: [0, 0, cameraZ], fov: 48, near: 0.1, far: farPlane }}
       >
-        <color attach="background" args={["#020617"]} />
+        <color attach="background" args={["#fef9ff"]} />
+        <fog attach="fog" args={["#fdf2f8", Math.max(28, layout.totalSpan * 0.85), farPlane]} />
         <BoardScene game={game} onCellClick={onCellClick} layout={layout} />
         <OrbitControls
           makeDefault

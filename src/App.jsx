@@ -7,6 +7,13 @@ import {
   makeMove,
   normalizeSize,
 } from "./gameLogic";
+import {
+  playDrawSfx,
+  playInvalidSfx,
+  playLocalWinSfx,
+  playMoveSfx,
+  playSuperWinSfx,
+} from "./soundEffects";
 
 const DEFAULT_SIZE = 3;
 
@@ -18,6 +25,7 @@ const boardLabel = (boardIndex, size) => {
 const App = () => {
   const [game, setGame] = useState(() => createInitialGameState(DEFAULT_SIZE));
   const [sizeInput, setSizeInput] = useState(String(DEFAULT_SIZE));
+  const [soundEnabled, setSoundEnabled] = useState(true);
 
   const allowedBoards = useMemo(() => getAllowedBoardIndexes(game), [game]);
 
@@ -41,7 +49,28 @@ const App = () => {
   }, [allowedBoards, game.currentPlayer, game.isDraw, game.size, game.winner]);
 
   const handleCellClick = (boardIndex, cellIndex) => {
-    setGame((currentGame) => makeMove(currentGame, boardIndex, cellIndex));
+    const nextGame = makeMove(game, boardIndex, cellIndex);
+    if (nextGame === game) {
+      playInvalidSfx(soundEnabled);
+      return;
+    }
+
+    playMoveSfx(soundEnabled);
+
+    const capturedLocalBoard = nextGame.boards.some((nextBoard, index) => {
+      const previousBoard = game.boards[index];
+      return !previousBoard.winner && Boolean(nextBoard.winner);
+    });
+
+    if (!game.winner && nextGame.winner) {
+      playSuperWinSfx(soundEnabled);
+    } else if (!game.isDraw && nextGame.isDraw) {
+      playDrawSfx(soundEnabled);
+    } else if (capturedLocalBoard) {
+      playLocalWinSfx(soundEnabled);
+    }
+
+    setGame(nextGame);
   };
 
   const handleApplySize = () => {
@@ -75,6 +104,9 @@ const App = () => {
         <button type="button" onClick={handleRestart}>
           Restart Current Size
         </button>
+        <button type="button" onClick={() => setSoundEnabled((current) => !current)}>
+          Sound: {soundEnabled ? "On" : "Off"}
+        </button>
       </div>
 
       <p className="status">{statusText}</p>
@@ -99,6 +131,7 @@ const App = () => {
             board.
           </li>
           <li>Win the super board by winning a full row, column, or diagonal of local boards.</li>
+          <li>Soft sound effects are enabled by default. Use the Sound button to mute.</li>
         </ol>
       </section>
     </main>

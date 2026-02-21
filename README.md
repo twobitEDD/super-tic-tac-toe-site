@@ -17,4 +17,6 @@ Then open the local URL printed by Vite.
 - Standard Super Tic-Tac-Toe move-direction rules
 - Configurable `N x N` scaling for both local and meta boards
 - Mouse/trackpad zoom + pan controls for larger board sizes
+- Pastel/fuzzy visual theme for a light-hearted look
+- Built-in basic sound effects with a mute toggle
 - Restart controls and turn/status messaging
