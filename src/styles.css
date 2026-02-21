@@ -1,0 +1,112 @@
+:root {
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.4;
+  font-weight: 400;
+  color: #e2e8f0;
+  background: #020617;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at top, #0f172a 0%, #020617 55%);
+  color: #e2e8f0;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app-shell {
+  width: min(1200px, 100%);
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+h1 {
+  margin: 0 0 0.25rem;
+  font-size: clamp(1.5rem, 3.4vw, 2.4rem);
+}
+
+.subtitle {
+  margin: 0 0 1rem;
+  color: #94a3b8;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
+}
+
+.controls label {
+  font-weight: 600;
+}
+
+.controls input {
+  width: 5rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.5rem;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+.controls button {
+  border: 1px solid #475569;
+  border-radius: 0.6rem;
+  padding: 0.5rem 0.8rem;
+  background: #1e293b;
+  color: #f8fafc;
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease;
+}
+
+.controls button:hover {
+  background: #334155;
+  transform: translateY(-1px);
+}
+
+.status {
+  margin: 0.4rem 0 0;
+  font-weight: 600;
+}
+
+.meta {
+  margin: 0.2rem 0 0.8rem;
+  color: #94a3b8;
+  font-size: 0.95rem;
+}
+
+.board-canvas {
+  height: min(68vh, 820px);
+  min-height: 360px;
+  border: 1px solid #334155;
+  border-radius: 0.9rem;
+  overflow: hidden;
+  box-shadow: 0 18px 36px rgba(2, 6, 23, 0.5);
+}
+
+.rules {
+  margin-top: 1rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid #334155;
+  border-radius: 0.8rem;
+  background: rgba(15, 23, 42, 0.7);
+}
+
+.rules h2 {
+  margin: 0 0 0.45rem;
+  font-size: 1rem;
+}
+
+.rules ol {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: #cbd5e1;
+}

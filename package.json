@@ -1,0 +1,32 @@
+{
+  "name": "super-tic-tac-toe-site",
+  "version": "1.0.0",
+  "description": "SUPER TIC TAC TOE!",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/twobitEDD/super-tic-tac-toe-site.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/twobitEDD/super-tic-tac-toe-site/issues"
+  },
+  "homepage": "https://github.com/twobitEDD/super-tic-tac-toe-site#readme",
+  "dependencies": {
+    "@react-three/fiber": "^9.5.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "three": "^0.183.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.1.4",
+    "vite": "^7.3.1"
+  }
+}
