@@ -16,4 +16,5 @@ Then open the local URL printed by Vite.
 - Clickable 3D board rendered with Three.js via React Three Fiber
 - Standard Super Tic-Tac-Toe move-direction rules
 - Configurable `N x N` scaling for both local and meta boards
+- Mouse/trackpad zoom + pan controls for larger board sizes
 - Restart controls and turn/status messaging

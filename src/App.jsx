@@ -82,6 +82,7 @@ const App = () => {
         Size: {game.size} x {game.size} boards, {game.size} x {game.size} cells each. Moves played:{" "}
         {game.moveCount}
       </p>
+      <p className="zoom-hint">Zoom: mouse wheel or trackpad pinch. Pan: click and drag.</p>
 
       <Board3D game={game} onCellClick={handleCellClick} />
 

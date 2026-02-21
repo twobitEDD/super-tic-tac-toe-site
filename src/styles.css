@@ -83,6 +83,12 @@ h1 {
   font-size: 0.95rem;
 }
 
+.zoom-hint {
+  margin: 0 0 0.8rem;
+  color: #cbd5e1;
+  font-size: 0.9rem;
+}
+
 .board-canvas {
   height: min(68vh, 820px);
   min-height: 360px;
