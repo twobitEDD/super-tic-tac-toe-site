@@ -1,7 +1,6 @@
 const CACHE_NAME = "super-ttt-app-v2";
 const APP_SHELL = [
   "/",
-  "/?screen=home",
   "/index.html",
   "/manifest.webmanifest",
   "/icons/icon-192.svg",

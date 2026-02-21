@@ -1,7 +1,7 @@
 import { Cloud, OrbitControls, Sparkles, Stars } from "@react-three/drei";
 import { Bloom, ChromaticAberration, EffectComposer, Noise, Vignette } from "@react-three/postprocessing";
-import { Canvas } from "@react-three/fiber";
-import { useMemo } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { useEffect, useMemo, useRef } from "react";
 import { BlendFunction } from "postprocessing";
 import { Vector2 } from "three";
 import { canPlayInBoard, indexToCoords, isBoardResolved } from "./gameLogic";
@@ -23,6 +23,7 @@ const PALETTE = {
 };
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+const easeOutCubic = (value) => 1 - (1 - value) ** 3;
 
 const getLayout = (size) => {
   const cellSize = clamp(BASE_LOCAL_BOARD_SPAN / size, MIN_CELL_SIZE, MAX_CELL_SIZE);
@@ -42,13 +43,13 @@ const getLayout = (size) => {
   };
 };
 
-const XMark = ({ x, y, cellSize }) => {
+const XMark = ({ cellSize }) => {
   const length = cellSize * 0.72;
   const thickness = Math.max(cellSize * 0.12, 0.04);
   const depth = Math.max(cellSize * 0.1, 0.06);
 
   return (
-    <group position={[x, y, 0.08]}>
+    <group>
       <mesh rotation={[0, 0, Math.PI / 4]}>
         <boxGeometry args={[length, thickness, depth]} />
         <meshStandardMaterial color={PALETTE.x} emissive="#fb7185" emissiveIntensity={0.2} />
@@ -61,12 +62,87 @@ const XMark = ({ x, y, cellSize }) => {
   );
 };
 
-const OMark = ({ x, y, cellSize }) => (
-  <mesh position={[x, y, 0.08]}>
+const OMark = ({ cellSize }) => (
+  <mesh>
     <torusGeometry args={[cellSize * 0.28, Math.max(cellSize * 0.08, 0.03), 16, 32]} />
     <meshStandardMaterial color={PALETTE.o} emissive="#5eead4" emissiveIntensity={0.2} />
   </mesh>
 );
+
+const AnimatedPiece = ({ value, x, y, cellSize, isLatestMove, animationToken }) => {
+  const groupRef = useRef(null);
+  const animationStartRef = useRef(0);
+
+  useEffect(() => {
+    if (isLatestMove) {
+      animationStartRef.current = performance.now();
+    }
+  }, [animationToken, isLatestMove]);
+
+  useFrame(() => {
+    if (!groupRef.current) {
+      return;
+    }
+
+    if (!isLatestMove) {
+      groupRef.current.position.set(x, y, 0.08);
+      groupRef.current.scale.set(1, 1, 1);
+      return;
+    }
+
+    const elapsed = (performance.now() - animationStartRef.current) / 1000;
+    const duration = 0.82;
+    const normalized = Math.min(Math.max(elapsed / duration, 0), 1);
+    const settled = easeOutCubic(normalized);
+    const dropHeight = Math.max(cellSize * 2.6, 1.1);
+    const bounce =
+      Math.sin(settled * Math.PI * 3.6) * Math.max(cellSize * 0.26, 0.08) * (1 - settled);
+    const z = 0.08 + (1 - settled) * dropHeight + bounce;
+    const scale = 1 + Math.sin(settled * Math.PI) * 0.45 * (1 - settled);
+
+    groupRef.current.position.set(x, y, z);
+    groupRef.current.scale.set(scale, scale, scale);
+  });
+
+  return (
+    <group ref={groupRef} position={[x, y, 0.08]}>
+      {value === "X" ? <XMark cellSize={cellSize} /> : <OMark cellSize={cellSize} />}
+    </group>
+  );
+};
+
+const GravityWave = ({ x, y, cellSize, animationToken }) => {
+  const ringRef = useRef(null);
+  const ringMaterialRef = useRef(null);
+  const startRef = useRef(0);
+
+  useEffect(() => {
+    startRef.current = performance.now();
+  }, [animationToken]);
+
+  useFrame(() => {
+    if (!ringRef.current || !ringMaterialRef.current) {
+      return;
+    }
+
+    const elapsed = (performance.now() - startRef.current) / 1000;
+    const duration = 1.12;
+    const normalized = Math.min(elapsed / duration, 1);
+    const eased = easeOutCubic(normalized);
+    const scale = 1 + eased * 6.5;
+
+    ringRef.current.scale.set(scale, scale, 1);
+    ringMaterialRef.current.opacity = (1 - eased) * 0.5;
+    ringRef.current.visible = normalized < 1;
+  });
+
+  return (
+    <mesh ref={ringRef} position={[x, y, 0.13]}>
+      <torusGeometry args={[Math.max(cellSize * 0.22, 0.1), Math.max(cellSize * 0.025, 0.015), 16, 72]} />
+      <meshBasicMaterial ref={ringMaterialRef} color="#f0abfc" transparent opacity={0.5} />
+    </mesh>
+  );
+};
 
 const VaporwaveBackdrop = ({ totalSpan }) => {
   const radius = clamp(totalSpan * 0.1, 2.4, 15);
@@ -154,6 +230,24 @@ const BoardScene = ({ game, onCellClick, layout }) => {
     [boardCenterOffset, boardGap, boardSpan, game.boards, size],
   );
 
+  const lastMoveWorldPosition = useMemo(() => {
+    if (!game.lastMove) {
+      return null;
+    }
+
+    const center = boardCenters[game.lastMove.boardIndex];
+    if (!center) {
+      return null;
+    }
+
+    const { row, col } = indexToCoords(game.lastMove.cellIndex, size);
+    return {
+      x: center.x + (col - boardCenterOffset) * cellSize,
+      y: center.y + (boardCenterOffset - row) * cellSize,
+      token: game.lastMove.timestamp ?? game.lastMove.moveNumber ?? game.moveCount,
+    };
+  }, [boardCenterOffset, boardCenters, cellSize, game.lastMove, game.moveCount, size]);
+
   return (
     <>
       <hemisphereLight args={["#ffe4ff", "#dbeafe", 0.78]} />
@@ -167,6 +261,14 @@ const BoardScene = ({ game, onCellClick, layout }) => {
       />
       <pointLight position={[0, totalSpan * 0.2, 9]} intensity={0.42} color="#a78bfa" />
       <VaporwaveBackdrop totalSpan={totalSpan} />
+      {lastMoveWorldPosition ? (
+        <GravityWave
+          x={lastMoveWorldPosition.x}
+          y={lastMoveWorldPosition.y}
+          cellSize={cellSize}
+          animationToken={lastMoveWorldPosition.token}
+        />
+      ) : null}
 
       {game.boards.map((board, boardIndex) => {
         const center = boardCenters[boardIndex];
@@ -268,8 +370,21 @@ const BoardScene = ({ game, onCellClick, layout }) => {
                     />
                   </mesh>
 
-                  {cellValue === "X" ? <XMark x={x} y={y} cellSize={cellSize} /> : null}
-                  {cellValue === "O" ? <OMark x={x} y={y} cellSize={cellSize} /> : null}
+                  {cellValue ? (
+                    <AnimatedPiece
+                      value={cellValue}
+                      x={x}
+                      y={y}
+                      cellSize={cellSize}
+                      isLatestMove={
+                        Boolean(game.lastMove) &&
+                        game.lastMove.boardIndex === boardIndex &&
+                        game.lastMove.cellIndex === cellIndex &&
+                        game.lastMove.player === cellValue
+                      }
+                      animationToken={game.lastMove?.timestamp ?? game.moveCount}
+                    />
+                  ) : null}
                 </group>
               );
             })}

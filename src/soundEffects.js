@@ -77,6 +77,26 @@ export const playMoveSfx = (enabled) =>
     { frequency: 680, when: 0.05, duration: 0.09, gain: 0.03, type: "triangle" },
   ]);
 
+export const playXMoveSfx = (enabled) =>
+  playPattern(enabled, [
+    { frequency: 560, when: 0, duration: 0.07, gain: 0.032, type: "triangle" },
+    { frequency: 720, when: 0.05, duration: 0.08, gain: 0.034, type: "triangle" },
+    { frequency: 900, when: 0.1, duration: 0.09, gain: 0.036, type: "sine" },
+  ]);
+
+export const playOMoveSfx = (enabled) =>
+  playPattern(enabled, [
+    { frequency: 520, when: 0, duration: 0.08, gain: 0.032, type: "triangle" },
+    { frequency: 410, when: 0.06, duration: 0.09, gain: 0.03, type: "triangle" },
+    { frequency: 310, when: 0.12, duration: 0.1, gain: 0.028, type: "sine" },
+  ]);
+
+export const playInterTurnSfx = (enabled) =>
+  playPattern(enabled, [
+    { frequency: 482, when: 0.18, duration: 0.06, gain: 0.017, type: "sine" },
+    { frequency: 535, when: 0.24, duration: 0.07, gain: 0.016, type: "sine" },
+  ]);
+
 export const playInvalidSfx = (enabled) =>
   playPattern(enabled, [
     {

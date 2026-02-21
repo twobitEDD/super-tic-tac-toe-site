@@ -14,13 +14,10 @@ Then open the local URL printed by Vite.
 ## What this build includes
 
 - Clickable 3D board rendered with Three.js via React Three Fiber
-- Standard Super Tic-Tac-Toe move-direction rules
-- Configurable `N x N` scaling for both local and meta boards
-- Mouse/trackpad zoom + pan controls for larger board sizes
-- Pastel/fuzzy visual theme for a light-hearted look
-- Built-in basic sound effects with a mute toggle
-- Local save persistence with game timeline and resume support
-- PWA app mode (install prompt, standalone display, and offline shell cache)
-- Native-style app tabs (Home / Play / Timeline) with home screen quick actions
-- Deeper vaporwave 3D visuals (fuzzy cloud layers, sparkles, bloom, chromatic glow)
-- Restart controls and turn/status messaging
+- Standard Super Tic-Tac-Toe move-direction rules in classic 3x3 mode
+- Centered single-purpose game-first interface
+- Piece drop/bounce animation and gravity-wave ripple effects on each move
+- Player-aware sound design: upshift for X, downshift for O, plus neutral inter-turn tones
+- Deeper vaporwave 3D visuals (fuzzy clouds, sparkles, bloom, chromatic glow, scanlines)
+- Local save persistence for current game between refreshes
+- PWA app mode (standalone display and offline shell cache)
