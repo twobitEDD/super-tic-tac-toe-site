@@ -19,4 +19,5 @@ Then open the local URL printed by Vite.
 - Mouse/trackpad zoom + pan controls for larger board sizes
 - Pastel/fuzzy visual theme for a light-hearted look
 - Built-in basic sound effects with a mute toggle
+- Local save persistence with game timeline and resume support
 - Restart controls and turn/status messaging
