@@ -20,4 +20,5 @@ Then open the local URL printed by Vite.
 - Pastel/fuzzy visual theme for a light-hearted look
 - Built-in basic sound effects with a mute toggle
 - Local save persistence with game timeline and resume support
+- PWA app mode (install prompt, standalone display, and offline shell cache)
 - Restart controls and turn/status messaging
