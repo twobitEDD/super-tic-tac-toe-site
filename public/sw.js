@@ -1,5 +1,12 @@
-const CACHE_NAME = "super-ttt-app-v1";
-const APP_SHELL = ["/", "/index.html", "/manifest.webmanifest", "/icons/icon-192.svg", "/icons/icon-512.svg"];
+const CACHE_NAME = "super-ttt-app-v2";
+const APP_SHELL = [
+  "/",
+  "/?screen=home",
+  "/index.html",
+  "/manifest.webmanifest",
+  "/icons/icon-192.svg",
+  "/icons/icon-512.svg",
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

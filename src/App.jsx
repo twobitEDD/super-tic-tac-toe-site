@@ -53,10 +53,25 @@ const getStandaloneState = () => {
   return mediaStandalone || iosStandalone;
 };
 
+const getInitialTab = () => {
+  if (typeof window === "undefined") {
+    return "home";
+  }
+
+  const search = new URLSearchParams(window.location.search);
+  const requestedTab = search.get("screen");
+  if (requestedTab === "home" || requestedTab === "play" || requestedTab === "timeline") {
+    return requestedTab;
+  }
+
+  return getStandaloneState() ? "home" : "play";
+};
+
 const App = () => {
   const [store, setStore] = useState(() => loadGameStore());
   const [installPromptEvent, setInstallPromptEvent] = useState(null);
   const [isStandalone, setIsStandalone] = useState(() => getStandaloneState());
+  const [activeTab, setActiveTab] = useState(() => getInitialTab());
 
   const activeGameEntry = useMemo(
     () => store.games.find((entry) => entry.id === store.activeGameId) ?? store.games[0],
@@ -65,7 +80,9 @@ const App = () => {
 
   const game = activeGameEntry?.gameState ?? createInitialGameState(DEFAULT_SIZE);
   const timelineGames = useMemo(() => sortTimelineGames(store.games), [store.games]);
+  const recentGames = timelineGames.slice(0, 3);
   const soundEnabled = store.soundEnabled;
+  const activeGameStatus = describeGameStatus(game);
 
   const allowedBoards = useMemo(() => getAllowedBoardIndexes(game), [game]);
 
@@ -185,6 +202,7 @@ const App = () => {
   };
 
   const handleApplySize = () => {
+    setActiveTab("play");
     setStore((currentStore) => {
       const nextSize = normalizeSize(currentStore.sizeInput);
       const newGame = createNextGameEntry(nextSize, currentStore.games);
@@ -288,7 +306,80 @@ const App = () => {
         </p>
       ) : null}
 
-      <div className="app-grid">
+      {activeTab === "home" ? (
+        <section className="home-panel">
+          <h2>Home</h2>
+          <p className="home-subtitle">
+            Resume your latest match, launch a new one, or jump into timeline history.
+          </p>
+          <div className="home-hero">
+            <div>
+              <p className="home-kicker">Currently Open</p>
+              <h3>{activeGameEntry?.name ?? "Game Session"}</h3>
+              <p>
+                {activeGameStatus.label} • {game.size} x {game.size} • {game.moveCount} moves
+              </p>
+            </div>
+            <div className="home-hero-actions">
+              <button type="button" className="chip-button chip-install" onClick={() => setActiveTab("play")}>
+                Continue Playing
+              </button>
+              <button type="button" className="chip-button" onClick={handleApplySize}>
+                New Game from N
+              </button>
+              <button type="button" className="chip-button" onClick={() => setActiveTab("timeline")}>
+                Open Timeline
+              </button>
+            </div>
+          </div>
+
+          <div className="home-grid">
+            <section className="timeline mini">
+              <h2>Recent Games</h2>
+              <ul className="timeline-list">
+                {recentGames.map((gameEntry) => {
+                  const gameStatus = describeGameStatus(gameEntry.gameState);
+                  const isActive = gameEntry.id === activeGameEntry?.id;
+
+                  return (
+                    <li key={gameEntry.id}>
+                      <button
+                        type="button"
+                        className={`timeline-item ${isActive ? "is-active" : ""}`}
+                        onClick={() => {
+                          handleOpenGame(gameEntry.id);
+                          setActiveTab("play");
+                        }}
+                      >
+                        <span className="timeline-title-row">
+                          <span className="timeline-name">{gameEntry.name}</span>
+                          <span className={`timeline-pill timeline-pill-${gameStatus.kind}`}>
+                            {gameStatus.label}
+                          </span>
+                        </span>
+                        <span className="timeline-detail-row">
+                          Updated {formatTimestamp(gameEntry.updatedAt)} • {gameEntry.gameState.moveCount} moves
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+
+            <section className="rules">
+              <h2>Quick Rules</h2>
+              <ol>
+                <li>Win local boards, then connect wins on the super board.</li>
+                <li>Your chosen cell sends the next player to a matching board.</li>
+                <li>If that board is resolved, they can play anywhere open.</li>
+              </ol>
+            </section>
+          </div>
+        </section>
+      ) : null}
+
+      {activeTab === "play" ? (
         <section className="play-panel">
           <div className="controls">
             <label htmlFor="board-size-input">Board size N</label>
@@ -319,8 +410,10 @@ const App = () => {
 
           <Board3D game={game} onCellClick={handleCellClick} />
         </section>
+      ) : null}
 
-        <aside className="side-panel">
+      {activeTab === "timeline" ? (
+        <div className="timeline-screen">
           <section className="timeline">
             <h2>Saved Games Timeline</h2>
             <p className="timeline-subtitle">
@@ -336,7 +429,10 @@ const App = () => {
                     <button
                       type="button"
                       className={`timeline-item ${isActive ? "is-active" : ""}`}
-                      onClick={() => handleOpenGame(gameEntry.id)}
+                      onClick={() => {
+                        handleOpenGame(gameEntry.id);
+                        setActiveTab("play");
+                      }}
                     >
                       <span className="timeline-title-row">
                         <span className="timeline-name">{gameEntry.name}</span>
@@ -349,9 +445,7 @@ const App = () => {
                         {gameEntry.gameState.moveCount} moves • Updated{" "}
                         {formatTimestamp(gameEntry.updatedAt)}
                       </span>
-                      <span className="timeline-open-label">
-                        {isActive ? "Open now" : "Open this game"}
-                      </span>
+                      <span className="timeline-open-label">Open this game in Play tab</span>
                     </button>
                   </li>
                 );
@@ -376,8 +470,32 @@ const App = () => {
               <li>Games auto-save with timeline history, so you can leave and resume later.</li>
             </ol>
           </section>
-        </aside>
-      </div>
+        </div>
+      ) : null}
+
+      <nav className="app-tabbar">
+        <button
+          type="button"
+          className={`tab-button ${activeTab === "home" ? "is-active" : ""}`}
+          onClick={() => setActiveTab("home")}
+        >
+          Home
+        </button>
+        <button
+          type="button"
+          className={`tab-button ${activeTab === "play" ? "is-active" : ""}`}
+          onClick={() => setActiveTab("play")}
+        >
+          Play
+        </button>
+        <button
+          type="button"
+          className={`tab-button ${activeTab === "timeline" ? "is-active" : ""}`}
+          onClick={() => setActiveTab("timeline")}
+        >
+          Timeline
+        </button>
+      </nav>
     </main>
   );
 };

@@ -1,22 +1,25 @@
-import { OrbitControls } from "@react-three/drei";
+import { Cloud, OrbitControls, Sparkles, Stars } from "@react-three/drei";
+import { Bloom, ChromaticAberration, EffectComposer, Noise, Vignette } from "@react-three/postprocessing";
 import { Canvas } from "@react-three/fiber";
 import { useMemo } from "react";
+import { BlendFunction } from "postprocessing";
+import { Vector2 } from "three";
 import { canPlayInBoard, indexToCoords, isBoardResolved } from "./gameLogic";
 
 const BASE_LOCAL_BOARD_SPAN = 3;
 const MIN_CELL_SIZE = 0.18;
 const MAX_CELL_SIZE = 1;
 const PALETTE = {
-  x: "#f43f5e",
-  o: "#14b8a6",
-  boardActive: "#fef3c7",
-  boardInactive: "#e2e8f0",
-  boardResolved: "#ddd6fe",
-  lineLocal: "#c4b5fd",
-  lineMeta: "#e9d5ff",
-  blobOne: "#f9a8d4",
-  blobTwo: "#93c5fd",
-  blobThree: "#86efac",
+  x: "#ff4fc8",
+  o: "#4ef4f1",
+  boardActive: "#ffe6f7",
+  boardInactive: "#f2eeff",
+  boardResolved: "#d9d5ff",
+  lineLocal: "#c084fc",
+  lineMeta: "#8b5cf6",
+  glowOne: "#ff78d8",
+  glowTwo: "#8acbff",
+  glowThree: "#81ffd9",
 };
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -65,30 +68,73 @@ const OMark = ({ x, y, cellSize }) => (
   </mesh>
 );
 
-const FuzzyBackdrop = ({ totalSpan }) => {
+const VaporwaveBackdrop = ({ totalSpan }) => {
   const radius = clamp(totalSpan * 0.1, 2.4, 15);
   const offset = clamp(totalSpan * 0.35, 4.5, 46);
   const z = -clamp(totalSpan * 0.24, 5, 30);
+  const starRadius = clamp(totalSpan * 1.8, 80, 650);
+  const gridWidth = clamp(totalSpan * 3.6, 30, 260);
+  const gridHeight = clamp(totalSpan * 2.3, 22, 170);
+  const cloudWidth = clamp(totalSpan * 0.44, 7, 38);
+  const cloudDepth = clamp(totalSpan * 0.1, 2, 12);
   const blobs = [
-    { position: [-offset, offset * 0.4, z], color: PALETTE.blobOne, scale: 1.25 },
-    { position: [offset * 0.25, offset * 0.7, z - 2], color: PALETTE.blobTwo, scale: 1.45 },
-    { position: [offset, -offset * 0.4, z - 1], color: PALETTE.blobThree, scale: 1.18 },
+    { position: [-offset, offset * 0.4, z], color: PALETTE.glowOne, scale: 1.25 },
+    { position: [offset * 0.25, offset * 0.7, z - 2], color: PALETTE.glowTwo, scale: 1.45 },
+    { position: [offset, -offset * 0.4, z - 1], color: PALETTE.glowThree, scale: 1.18 },
   ];
 
-  return blobs.map((blob, index) => (
-    <mesh key={`blob-${index}`} position={blob.position}>
-      <sphereGeometry args={[radius * blob.scale, 28, 28]} />
-      <meshStandardMaterial
-        color={blob.color}
-        transparent
-        opacity={0.24}
-        roughness={1}
-        metalness={0}
-        emissive={blob.color}
-        emissiveIntensity={0.16}
+  return (
+    <>
+      <Stars radius={starRadius} depth={58} count={420} factor={3.5} saturation={0} fade speed={0.3} />
+      <Sparkles
+        count={220}
+        scale={[gridWidth * 0.9, gridHeight * 0.9, 32]}
+        size={2.4}
+        speed={0.24}
+        noise={0.35}
+        color="#f9a8d4"
       />
-    </mesh>
-  ));
+
+      {blobs.map((blob, index) => (
+        <mesh key={`blob-${index}`} position={blob.position}>
+          <sphereGeometry args={[radius * blob.scale, 28, 28]} />
+          <meshStandardMaterial
+            color={blob.color}
+            transparent
+            opacity={0.22}
+            roughness={1}
+            metalness={0}
+            emissive={blob.color}
+            emissiveIntensity={0.18}
+          />
+        </mesh>
+      ))}
+
+      <Cloud
+        position={[-offset * 0.8, offset * 0.65, z - 5]}
+        width={cloudWidth}
+        depth={cloudDepth}
+        speed={0.14}
+        opacity={0.24}
+        segments={22}
+        color="#ffd9f4"
+      />
+      <Cloud
+        position={[offset * 0.7, -offset * 0.55, z - 7]}
+        width={cloudWidth * 1.2}
+        depth={cloudDepth}
+        speed={0.1}
+        opacity={0.2}
+        segments={24}
+        color="#caedff"
+      />
+
+      <mesh position={[0, -totalSpan * 0.45, z - 12]}>
+        <planeGeometry args={[gridWidth, gridHeight, 34, 20]} />
+        <meshBasicMaterial color="#a855f7" wireframe transparent opacity={0.17} />
+      </mesh>
+    </>
+  );
 };
 
 const BoardScene = ({ game, onCellClick, layout }) => {
@@ -110,16 +156,17 @@ const BoardScene = ({ game, onCellClick, layout }) => {
 
   return (
     <>
-      <hemisphereLight args={["#fff7ed", "#dbeafe", 0.74]} />
-      <ambientLight intensity={0.63} />
-      <directionalLight position={[1.5, 2, 8]} intensity={0.76} />
-      <pointLight position={[totalSpan * 0.2, totalSpan * 0.24, 11]} intensity={0.5} color="#f9a8d4" />
+      <hemisphereLight args={["#ffe4ff", "#dbeafe", 0.78]} />
+      <ambientLight intensity={0.64} />
+      <directionalLight position={[1.5, 2, 8]} intensity={0.84} />
+      <pointLight position={[totalSpan * 0.2, totalSpan * 0.24, 11]} intensity={0.7} color="#f9a8d4" />
       <pointLight
         position={[-totalSpan * 0.24, -totalSpan * 0.26, 12]}
-        intensity={0.44}
-        color="#a7f3d0"
+        intensity={0.58}
+        color="#67e8f9"
       />
-      <FuzzyBackdrop totalSpan={totalSpan} />
+      <pointLight position={[0, totalSpan * 0.2, 9]} intensity={0.42} color="#a78bfa" />
+      <VaporwaveBackdrop totalSpan={totalSpan} />
 
       {game.boards.map((board, boardIndex) => {
         const center = boardCenters[boardIndex];
@@ -128,11 +175,11 @@ const BoardScene = ({ game, onCellClick, layout }) => {
 
         let boardOverlayColor = null;
         if (board.winner === "X") {
-          boardOverlayColor = "#fecdd3";
+          boardOverlayColor = "#ffd0f2";
         } else if (board.winner === "O") {
-          boardOverlayColor = "#bfdbfe";
+          boardOverlayColor = "#cffafe";
         } else if (board.isDraw) {
-          boardOverlayColor = "#ddd6fe";
+          boardOverlayColor = "#d9d5ff";
         }
 
         const boardColor = boardResolved
@@ -146,7 +193,7 @@ const BoardScene = ({ game, onCellClick, layout }) => {
             {boardPlayable && !boardResolved && !gameOver ? (
               <mesh position={[center.x, center.y, -0.03]}>
                 <planeGeometry args={[boardSpan + lineThickness * 1.6, boardSpan + lineThickness * 1.6]} />
-                <meshStandardMaterial color="#fde68a" transparent opacity={0.24} />
+                <meshStandardMaterial color="#f0abfc" transparent opacity={0.22} />
               </mesh>
             ) : null}
 
@@ -183,15 +230,15 @@ const BoardScene = ({ game, onCellClick, layout }) => {
               const x = center.x + (col - boardCenterOffset) * cellSize;
               const y = center.y + (boardCenterOffset - row) * cellSize;
 
-              let cellColor = "#fff7ed";
+              let cellColor = "#fff1f2";
               if (!boardPlayable && !boardResolved && !gameOver) {
-                cellColor = "#e2e8f0";
+                cellColor = "#e9e4ff";
               }
               if (boardResolved) {
                 if (board.winner === "X") {
-                  cellColor = "#fecdd3";
+                  cellColor = "#ffd0f2";
                 } else if (board.winner === "O") {
-                  cellColor = "#bfdbfe";
+                  cellColor = "#cffafe";
                 } else {
                   cellColor = "#ddd6fe";
                 }
@@ -251,6 +298,7 @@ const BoardScene = ({ game, onCellClick, layout }) => {
 
 const Board3D = ({ game, onCellClick }) => {
   const layout = useMemo(() => getLayout(game.size), [game.size]);
+  const chromaticOffset = useMemo(() => new Vector2(0.0012, 0.0018), []);
   const cameraZ = Math.max(18, layout.totalSpan * 1.45);
   const minDistance = Math.max(6, layout.totalSpan * 0.3);
   const maxDistance = Math.max(34, layout.totalSpan * 6);
@@ -262,8 +310,8 @@ const Board3D = ({ game, onCellClick }) => {
         key={`board-canvas-${game.size}`}
         camera={{ position: [0, 0, cameraZ], fov: 48, near: 0.1, far: farPlane }}
       >
-        <color attach="background" args={["#fef9ff"]} />
-        <fog attach="fog" args={["#fdf2f8", Math.max(28, layout.totalSpan * 0.85), farPlane]} />
+        <color attach="background" args={["#12042b"]} />
+        <fog attach="fog" args={["#21053d", Math.max(28, layout.totalSpan * 0.85), farPlane]} />
         <BoardScene game={game} onCellClick={onCellClick} layout={layout} />
         <OrbitControls
           makeDefault
@@ -274,6 +322,18 @@ const Board3D = ({ game, onCellClick }) => {
           minDistance={minDistance}
           maxDistance={maxDistance}
         />
+        <EffectComposer>
+          <Bloom
+            intensity={1.08}
+            luminanceThreshold={0.15}
+            luminanceSmoothing={0.9}
+            radius={0.78}
+            mipmapBlur
+          />
+          <ChromaticAberration offset={chromaticOffset} radialModulation modulationOffset={0.35} />
+          <Noise premultiply opacity={0.12} blendFunction={BlendFunction.SOFT_LIGHT} />
+          <Vignette eskil={false} offset={0.2} darkness={0.82} />
+        </EffectComposer>
       </Canvas>
     </div>
   );

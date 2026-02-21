@@ -21,4 +21,6 @@ Then open the local URL printed by Vite.
 - Built-in basic sound effects with a mute toggle
 - Local save persistence with game timeline and resume support
 - PWA app mode (install prompt, standalone display, and offline shell cache)
+- Native-style app tabs (Home / Play / Timeline) with home screen quick actions
+- Deeper vaporwave 3D visuals (fuzzy cloud layers, sparkles, bloom, chromatic glow)
 - Restart controls and turn/status messaging

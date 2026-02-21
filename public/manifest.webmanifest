@@ -2,11 +2,26 @@
   "name": "Super Tic-Tac-Toe",
   "short_name": "Super TTT",
   "description": "Play colorful Super Tic-Tac-Toe with saved game timeline.",
-  "start_url": "/",
+  "start_url": "/?screen=home",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#f8f5ff",
   "theme_color": "#8b5cf6",
   "orientation": "portrait-primary",
+  "shortcuts": [
+    {
+      "name": "Continue Playing",
+      "short_name": "Continue",
+      "description": "Jump right back into your active game",
+      "url": "/?screen=play"
+    },
+    {
+      "name": "Game Timeline",
+      "short_name": "Timeline",
+      "description": "Open saved game history and resume any match",
+      "url": "/?screen=timeline"
+    }
+  ],
   "icons": [
     {
       "src": "/icons/icon-192.svg",
