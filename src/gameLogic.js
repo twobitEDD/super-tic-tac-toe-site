@@ -24,6 +24,7 @@ export const createInitialGameState = (requestedSize = DEFAULT_SIZE) => {
     winner: null,
     isDraw: false,
     moveCount: 0,
+    lastMove: null,
     boards: Array.from({ length: boardCellCount }, () => ({
       cells: Array(boardCellCount).fill(null),
       winner: null,
@@ -173,6 +174,13 @@ export const makeMove = (state, boardIndex, cellIndex) => {
     winner,
     isDraw,
     nextBoardIndex,
+    lastMove: {
+      boardIndex,
+      cellIndex,
+      player: state.currentPlayer,
+      moveNumber: state.moveCount + 1,
+      timestamp: Date.now(),
+    },
     currentPlayer: winner || isDraw ? state.currentPlayer : togglePlayer(state.currentPlayer),
   };
 };
