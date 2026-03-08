@@ -12,7 +12,9 @@ export const createMatchSave = ({ matchId, matchTitle, pixel, claimer, challenge
   saveId: `save-${matchId}-${Date.now()}`,
   matchId,
   matchTitle,
-  pixel: isObject(pixel) ? { row: Number(pixel.row) || 1, col: Number(pixel.col) || 1 } : { row: 1, col: 1 },
+  pixel: isObject(pixel)
+    ? { row: Number(pixel.row) || 1, col: Number(pixel.col) || 1 }
+    : { row: 1, col: 1 },
   players: {
     claimer: typeof claimer === "string" ? claimer : "Unknown",
     challenger: typeof challenger === "string" ? challenger : null,

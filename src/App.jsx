@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Board3D from "./Board3D";
-import { createInitialGameState, getAllowedBoardIndexes, indexToCoords, makeMove } from "./gameLogic";
+import {
+  createInitialGameState,
+  getAllowedBoardIndexes,
+  indexToCoords,
+  makeMove,
+} from "./gameLogic";
 import {
   playDrawSfx,
   playInterTurnSfx,
@@ -77,11 +82,13 @@ const MATCH_STATUS_LABEL = {
 
 const isMarker = (value) => value === "X" || value === "O";
 const isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0;
-const isKnownMatchId = (value) => typeof value === "string" && KNOWN_MATCHES.some((entry) => entry.id === value);
+const isKnownMatchId = (value) =>
+  typeof value === "string" && KNOWN_MATCHES.some((entry) => entry.id === value);
 
 const countMoves = (boards) =>
   boards.reduce(
-    (total, board) => total + board.cells.reduce((boardTotal, marker) => boardTotal + (marker ? 1 : 0), 0),
+    (total, board) =>
+      total + board.cells.reduce((boardTotal, marker) => boardTotal + (marker ? 1 : 0), 0),
     0,
   );
 
@@ -107,7 +114,9 @@ const formatRelativeTime = (timestampMs) => {
 };
 
 const mergeKnownMatches = (saveMap) => {
-  const merged = new Map(KNOWN_MATCHES.map((match) => [match.id, { ...match, updatedAtEpoch: null }]));
+  const merged = new Map(
+    KNOWN_MATCHES.map((match) => [match.id, { ...match, updatedAtEpoch: null }]),
+  );
 
   for (const save of Object.values(saveMap)) {
     const localSummary = matchSummaryFromSave(save);
@@ -186,7 +195,9 @@ const coerceToClassicGame = (rawGame) => {
   });
 
   const moveCount =
-    Number.isInteger(rawGame.moveCount) && rawGame.moveCount >= 0 ? rawGame.moveCount : countMoves(boards);
+    Number.isInteger(rawGame.moveCount) && rawGame.moveCount >= 0
+      ? rawGame.moveCount
+      : countMoves(boards);
   const nextBoardIndex =
     Number.isInteger(rawGame.nextBoardIndex) &&
     rawGame.nextBoardIndex >= 0 &&
@@ -310,7 +321,9 @@ const App = () => {
   const knownMatches = useMemo(() => mergeKnownMatches(localMatchSaves), [localMatchSaves]);
   const allowedBoards = useMemo(() => getAllowedBoardIndexes(game), [game]);
   const selectedMatch = useMemo(
-    () => knownMatches.find((matchEntry) => matchEntry.id === session.selectedMatchId) ?? knownMatches[0],
+    () =>
+      knownMatches.find((matchEntry) => matchEntry.id === session.selectedMatchId) ??
+      knownMatches[0],
     [knownMatches, session.selectedMatchId],
   );
   const selectedMatchNarrative = useMemo(() => getMatchNarrative(selectedMatch), [selectedMatch]);
@@ -385,7 +398,14 @@ const App = () => {
       return `Re-watch mode: winner ${selectedMatch.winner ?? "TBD"} on pixel (${selectedMatch.pixel.row}, ${selectedMatch.pixel.col}).`;
     }
     return `Spectating ${selectedMatch.id} on pixel (${selectedMatch.pixel.row}, ${selectedMatch.pixel.col}).`;
-  }, [arenaMode, selectedMatch.id, selectedMatch.pixel.col, selectedMatch.pixel.row, selectedMatch.winner, statusText]);
+  }, [
+    arenaMode,
+    selectedMatch.id,
+    selectedMatch.pixel.col,
+    selectedMatch.pixel.row,
+    selectedMatch.winner,
+    statusText,
+  ]);
 
   const upsertAndTrackSave = (save) => {
     const nextMap = upsertLocalMatchSave(save);
@@ -496,7 +516,8 @@ const App = () => {
   };
 
   const handleSelectKnownMatch = (matchId) => {
-    const nextMatch = knownMatches.find((matchEntry) => matchEntry.id === matchId) ?? knownMatches[0];
+    const nextMatch =
+      knownMatches.find((matchEntry) => matchEntry.id === matchId) ?? knownMatches[0];
     setPlaybackRunning(false);
     setPlaybackFrames([]);
     setPlaybackIndex(0);
@@ -602,8 +623,8 @@ const App = () => {
           <p className="badge-line">Arcade Protocol // 2070</p>
           <h1>Nebula Showdown Grid</h1>
           <p>
-            Boot into the arcade hub, browse known SuperTicTacToe games, then watch, join, or re-watch matches tied to
-            pixel coordinates in the global map.
+            Boot into the arcade hub, browse known SuperTicTacToe games, then watch, join, or
+            re-watch matches tied to pixel coordinates in the global map.
           </p>
           <div className="landing-flow">
             <div>
@@ -624,7 +645,8 @@ const App = () => {
               Enter Arcade Hub
             </button>
             <p>
-              Pilot: <strong>{session.accountHandle}</strong> • Local saves: {Object.keys(localMatchSaves).length}
+              Pilot: <strong>{session.accountHandle}</strong> • Local saves:{" "}
+              {Object.keys(localMatchSaves).length}
             </p>
           </div>
         </section>
@@ -701,10 +723,18 @@ const App = () => {
               <h2>{selectedMatch.title}</h2>
               <p>{selectedMatchNarrative}</p>
               <div className="stage-action-row">
-                <button type="button" className="primary-match-action" onClick={handlePrimaryAction}>
+                <button
+                  type="button"
+                  className="primary-match-action"
+                  onClick={handlePrimaryAction}
+                >
                   {getPrimaryActionLabel(selectedMatch)}
                 </button>
-                <button type="button" className="primary-match-action alt" onClick={handleReplaySelectedSave}>
+                <button
+                  type="button"
+                  className="primary-match-action alt"
+                  onClick={handleReplaySelectedSave}
+                >
                   Play Saved Replay
                 </button>
                 <span className="status-pill">{MATCH_STATUS_LABEL[selectedMatch.status]}</span>
@@ -717,9 +747,13 @@ const App = () => {
               {interactionLocked ? (
                 <p className="stage-note">Board input is locked while watching/re-watching.</p>
               ) : (
-                <p className="stage-note">Challenge mode active: event log is recording this match.</p>
+                <p className="stage-note">
+                  Challenge mode active: event log is recording this match.
+                </p>
               )}
-              {playbackRunning ? <p className="stage-note">Replay running… frame {playbackIndex + 1}</p> : null}
+              {playbackRunning ? (
+                <p className="stage-note">Replay running… frame {playbackIndex + 1}</p>
+              ) : null}
             </div>
 
             <Board3D game={game} onCellClick={handleStageCellClick} />

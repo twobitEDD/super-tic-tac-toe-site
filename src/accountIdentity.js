@@ -17,7 +17,10 @@ export const createDynamicAccountIdentity = ({ handle, dynamicUser } = {}) => {
 
   return {
     provider: "dynamic.xyz",
-    accountId: typeof dynamicUser?.userId === "string" ? dynamicUser.userId : `local-${safeHandle.toLowerCase()}`,
+    accountId:
+      typeof dynamicUser?.userId === "string"
+        ? dynamicUser.userId
+        : `local-${safeHandle.toLowerCase()}`,
     handle: safeHandle,
     walletAddress,
   };

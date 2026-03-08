@@ -1,6 +1,7 @@
 const MATCH_SAVE_STORE_KEY = "super-ttt-match-saves-v1";
 
-const canUseStorage = () => typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+const canUseStorage = () =>
+  typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 
 export const loadLocalMatchSaves = () => {
   if (!canUseStorage()) {
