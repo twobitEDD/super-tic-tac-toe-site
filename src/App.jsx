@@ -16,15 +16,58 @@ const STORAGE_KEY = "super-ttt-focused-v1";
 const LEGACY_STORE_KEY = "super-tic-tac-toe-save-v1";
 const BACKDROP_OUTLINE_CELL_COUNT = 2400;
 const BACKDROP_OUTLINE_COLUMNS = 60;
-const KNOWN_GAMES = [
-  { id: "super-ttt", name: "Super Tic-Tac-Toe", mode: "Live", description: "Classic arena duel." },
-  { id: "orbital-bobble", name: "Orbital Bobble 3000", mode: "Queued", description: "Coming soon." },
-  { id: "kombat-58", name: "Mortal Kombat 58", mode: "Queued", description: "Coming soon." },
-  { id: "astro-racer", name: "Astro Racer Neon", mode: "Queued", description: "Coming soon." },
+const KNOWN_MATCHES = [
+  {
+    id: "match-2070-114",
+    title: "Downtown Cabinet #114",
+    status: "claim-open",
+    pixel: { row: 6, col: 18 },
+    claimer: "RookRift",
+    challenger: null,
+    winner: null,
+    updatedAt: "2m ago",
+  },
+  {
+    id: "match-2070-113",
+    title: "Skyline Ladder #113",
+    status: "live",
+    pixel: { row: 11, col: 27 },
+    claimer: "NovaThread",
+    challenger: "GridWarden",
+    winner: null,
+    updatedAt: "live now",
+  },
+  {
+    id: "match-2070-108",
+    title: "Neon Orbit #108",
+    status: "completed",
+    pixel: { row: 14, col: 9 },
+    claimer: "PixelNomad",
+    challenger: "CometLoop",
+    winner: "CometLoop",
+    updatedAt: "14m ago",
+  },
+  {
+    id: "match-2070-101",
+    title: "Dustline Showdown #101",
+    status: "completed",
+    pixel: { row: 3, col: 33 },
+    claimer: "OrbitForge",
+    challenger: "GlowPilot",
+    winner: "OrbitForge",
+    updatedAt: "29m ago",
+  },
 ];
+const MATCH_STATUS_LABEL = {
+  "claim-open": "Claimed / Open Challenge",
+  live: "Live Duel",
+  completed: "Completed",
+};
 
 const isMarker = (value) => value === "X" || value === "O";
 const isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0;
+const isKnownMatchId = (value) =>
+  typeof value === "string" && KNOWN_MATCHES.some((matchEntry) => matchEntry.id === value);
 
 const countMoves = (boards) =>
   boards.reduce(
@@ -33,6 +76,27 @@ const countMoves = (boards) =>
   );
 
 const OUTLINE_CELLS = Array.from({ length: BACKDROP_OUTLINE_CELL_COUNT }, (_, index) => index);
+
+const getMatchNarrative = (matchEntry) => {
+  const coord = `Pixel (${matchEntry.pixel.row}, ${matchEntry.pixel.col})`;
+  if (matchEntry.status === "claim-open") {
+    return `${coord} claimed by ${matchEntry.claimer}; waiting for a challenger.`;
+  }
+  if (matchEntry.status === "live") {
+    return `${coord} claimed by ${matchEntry.claimer}, challenged by ${matchEntry.challenger}.`;
+  }
+  return `${coord} claimed by ${matchEntry.claimer}, challenged by ${matchEntry.challenger}, winner ${matchEntry.winner}.`;
+};
+
+const getPrimaryActionLabel = (matchEntry) => {
+  if (matchEntry.status === "claim-open") {
+    return "Join Challenge";
+  }
+  if (matchEntry.status === "live") {
+    return "Watch Live Match";
+  }
+  return "Re-watch Match";
+};
 
 const coerceToClassicGame = (rawGame) => {
   const base = createInitialGameState(FIXED_SIZE);
@@ -105,7 +169,7 @@ const loadSession = () => {
     game: createInitialGameState(FIXED_SIZE),
     soundEnabled: true,
     accountHandle: "SpaceCowboy",
-    selectedGameId: "super-ttt",
+    selectedMatchId: KNOWN_MATCHES[0].id,
   };
   if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
     return defaultSession;
@@ -121,10 +185,9 @@ const loadSession = () => {
         accountHandle: isNonEmptyString(parsed?.accountHandle)
           ? parsed.accountHandle.trim().slice(0, 24)
           : defaultSession.accountHandle,
-        selectedGameId:
-          KNOWN_GAMES.some((gameEntry) => gameEntry.id === parsed?.selectedGameId)
-            ? parsed.selectedGameId
-            : defaultSession.selectedGameId,
+        selectedMatchId: isKnownMatchId(parsed?.selectedMatchId)
+          ? parsed.selectedMatchId
+          : defaultSession.selectedMatchId,
       };
     }
 
@@ -146,7 +209,7 @@ const loadSession = () => {
       game: coerceToClassicGame(activeLegacyGame),
       soundEnabled: parsedLegacy?.soundEnabled !== false,
       accountHandle: defaultSession.accountHandle,
-      selectedGameId: defaultSession.selectedGameId,
+      selectedMatchId: defaultSession.selectedMatchId,
     };
   } catch {
     return defaultSession;
@@ -161,7 +224,7 @@ const saveSession = (session) => {
     game: session.game,
     soundEnabled: session.soundEnabled,
     accountHandle: session.accountHandle,
-    selectedGameId: session.selectedGameId,
+    selectedMatchId: session.selectedMatchId,
   };
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 };
@@ -175,17 +238,29 @@ const App = () => {
   const [session, setSession] = useState(() => loadSession());
   const game = session.game;
   const [view, setView] = useState("landing");
+  const [arenaMode, setArenaMode] = useState("watch");
 
   const allowedBoards = useMemo(() => getAllowedBoardIndexes(game), [game]);
-  const selectedGame = useMemo(
-    () => KNOWN_GAMES.find((gameEntry) => gameEntry.id === session.selectedGameId) ?? KNOWN_GAMES[0],
-    [session.selectedGameId],
+  const selectedMatch = useMemo(
+    () => KNOWN_MATCHES.find((matchEntry) => matchEntry.id === session.selectedMatchId) ?? KNOWN_MATCHES[0],
+    [session.selectedMatchId],
   );
-  const selectedGameIsPlayable = selectedGame.id === "super-ttt";
+  const selectedMatchNarrative = useMemo(() => getMatchNarrative(selectedMatch), [selectedMatch]);
+  const interactionLocked = arenaMode !== "join";
 
   useEffect(() => {
     saveSession(session);
   }, [session]);
+
+  useEffect(() => {
+    if (selectedMatch.status === "completed") {
+      setArenaMode("rewatch");
+    } else if (arenaMode === "rewatch") {
+      setArenaMode("watch");
+    } else if (arenaMode === "join" && selectedMatch.status !== "claim-open") {
+      setArenaMode("watch");
+    }
+  }, [arenaMode, selectedMatch.status]);
 
   const statusText = useMemo(() => {
     if (game.winner) {
@@ -202,6 +277,16 @@ const App = () => {
 
     return `Player ${game.currentPlayer}: play in any open board.`;
   }, [allowedBoards, game.currentPlayer, game.isDraw, game.size, game.winner]);
+
+  const stageStatusText = useMemo(() => {
+    if (arenaMode === "join") {
+      return `Challenge active on pixel (${selectedMatch.pixel.row}, ${selectedMatch.pixel.col}). ${statusText}`;
+    }
+    if (arenaMode === "rewatch") {
+      return `Re-watch mode: winner ${selectedMatch.winner} on pixel (${selectedMatch.pixel.row}, ${selectedMatch.pixel.col}).`;
+    }
+    return `Spectating ${selectedMatch.id} on pixel (${selectedMatch.pixel.row}, ${selectedMatch.pixel.col}).`;
+  }, [arenaMode, selectedMatch.id, selectedMatch.pixel.col, selectedMatch.pixel.row, selectedMatch.winner, statusText]);
 
   const handleCellClick = (boardIndex, cellIndex) => {
     const nextGame = makeMove(game, boardIndex, cellIndex);
@@ -240,11 +325,49 @@ const App = () => {
     }));
   };
 
+  const handleStageCellClick = (boardIndex, cellIndex) => {
+    if (interactionLocked) {
+      playInvalidSfx(session.soundEnabled);
+      return;
+    }
+    handleCellClick(boardIndex, cellIndex);
+  };
+
   const handleRestart = () => {
     setSession((current) => ({
       ...current,
       game: createInitialGameState(FIXED_SIZE),
     }));
+  };
+
+  const handleSelectKnownMatch = (matchId) => {
+    const nextMatch = KNOWN_MATCHES.find((matchEntry) => matchEntry.id === matchId) ?? KNOWN_MATCHES[0];
+    setSession((current) => ({
+      ...current,
+      selectedMatchId: nextMatch.id,
+    }));
+
+    if (nextMatch.status === "completed") {
+      setArenaMode("rewatch");
+      return;
+    }
+    setArenaMode("watch");
+  };
+
+  const handlePrimaryAction = () => {
+    if (selectedMatch.status === "claim-open") {
+      setArenaMode("join");
+      setSession((current) => ({
+        ...current,
+        game: createInitialGameState(FIXED_SIZE),
+      }));
+      return;
+    }
+    if (selectedMatch.status === "completed") {
+      setArenaMode("rewatch");
+      return;
+    }
+    setArenaMode("watch");
   };
 
   return (
@@ -264,21 +387,21 @@ const App = () => {
           <p className="badge-line">Arcade Protocol // 2070</p>
           <h1>Nebula Showdown Grid</h1>
           <p>
-            Boot into the arcade hub, pick a known game, and battle in a neon arena where the world pixelmap lives as an
-            empty outlined grid behind every fight.
+            Boot into the arcade hub, browse known SuperTicTacToe games, then watch, join, or re-watch matches tied to
+            pixel coordinates in the global map.
           </p>
           <div className="landing-flow">
             <div>
               <h2>1. Enter Lobby</h2>
-              <p>Open the hub with your account and roster.</p>
+              <p>Open your account panel and match roster.</p>
             </div>
             <div>
-              <h2>2. Pick Known Game</h2>
-              <p>Super Tic-Tac-Toe is live, others are queued.</p>
+              <h2>2. Pick Known Match</h2>
+              <p>Each game points to one pixel coordinate claim.</p>
             </div>
             <div>
-              <h2>3. Hit The Arena</h2>
-              <p>The game runs over a blank outlined pixelmap field.</p>
+              <h2>3. Watch / Join / Re-watch</h2>
+              <p>Outcome tracks claimer, challenger, and winner.</p>
             </div>
           </div>
           <div className="launch-row">
@@ -286,7 +409,7 @@ const App = () => {
               Enter Arcade Hub
             </button>
             <p>
-              Pilot: <strong>{session.accountHandle}</strong> • Live mode ready
+              Pilot: <strong>{session.accountHandle}</strong> • Matches tracked: {KNOWN_MATCHES.length}
             </p>
           </div>
         </section>
@@ -313,24 +436,20 @@ const App = () => {
             </article>
 
             <article className="card games-card">
-              <h2>Known Games</h2>
+              <h2>Known SuperTicTacToe Games</h2>
               <ul className="known-games-list">
-                {KNOWN_GAMES.map((gameEntry) => (
-                  <li key={gameEntry.id}>
+                {KNOWN_MATCHES.map((matchEntry) => (
+                  <li key={matchEntry.id}>
                     <button
                       type="button"
-                      className={session.selectedGameId === gameEntry.id ? "is-active" : ""}
-                      onClick={() =>
-                        setSession((current) => ({
-                          ...current,
-                          selectedGameId: gameEntry.id,
-                        }))
-                      }
+                      className={session.selectedMatchId === matchEntry.id ? "is-active" : ""}
+                      onClick={() => handleSelectKnownMatch(matchEntry.id)}
                     >
-                      <span>{gameEntry.name}</span>
-                      <small>{gameEntry.mode}</small>
+                      <span>{matchEntry.title}</span>
+                      <small>{MATCH_STATUS_LABEL[matchEntry.status]}</small>
                     </button>
-                    <p>{gameEntry.description}</p>
+                    <p className="match-meta-line">{getMatchNarrative(matchEntry)}</p>
+                    <p className="match-meta-line">Updated: {matchEntry.updatedAt}</p>
                   </li>
                 ))}
               </ul>
@@ -342,42 +461,41 @@ const App = () => {
 
           <section className="game-stage card">
             <header className="stage-header">
-              <h2>{selectedGame.name}</h2>
-              <p>{selectedGameIsPlayable ? "Live match room is active." : "Queued game module, waiting for release."}</p>
+              <h2>{selectedMatch.title}</h2>
+              <p>{selectedMatchNarrative}</p>
+              <div className="stage-action-row">
+                <button type="button" className="primary-match-action" onClick={handlePrimaryAction}>
+                  {getPrimaryActionLabel(selectedMatch)}
+                </button>
+                <span className="status-pill">{MATCH_STATUS_LABEL[selectedMatch.status]}</span>
+              </div>
             </header>
 
-            {selectedGameIsPlayable ? (
-              <>
-                <div className="game-hud">
-                  <p className="status-line">{statusText}</p>
-                  <p className="meta-line">Classic mode: 9 local boards • Moves: {game.moveCount}</p>
-                </div>
+            <div className="game-hud">
+              <p className="status-line">{stageStatusText}</p>
+              <p className="meta-line">Classic mode: 9 local boards • Moves: {game.moveCount}</p>
+              {interactionLocked ? (
+                <p className="stage-note">Board input is locked while watching/re-watching.</p>
+              ) : (
+                <p className="stage-note">Challenge mode active: play to contest the claim.</p>
+              )}
+            </div>
 
-                <Board3D game={game} onCellClick={handleCellClick} />
+            <Board3D game={game} onCellClick={handleStageCellClick} />
 
-                <div className="control-strip">
-                  <button type="button" onClick={handleRestart}>
-                    New Game
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSession((current) => ({ ...current, soundEnabled: !current.soundEnabled }))
-                    }
-                  >
-                    Sound: {session.soundEnabled ? "On" : "Off"}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="queued-panel">
-                <p>
-                  <strong>{selectedGame.name}</strong> is listed in the known games roster, but this cabinet is still
-                  warming up.
-                </p>
-                <p>Switch to Super Tic-Tac-Toe to play now.</p>
-              </div>
-            )}
+            <div className="control-strip">
+              <button type="button" onClick={handleRestart} disabled={interactionLocked}>
+                New Game
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setSession((current) => ({ ...current, soundEnabled: !current.soundEnabled }))
+                }
+              >
+                Sound: {session.soundEnabled ? "On" : "Off"}
+              </button>
+            </div>
           </section>
         </section>
       )}

@@ -149,7 +149,8 @@ body {
 
 .launch-row button,
 .control-strip button,
-.games-card .secondary {
+.games-card .secondary,
+.primary-match-action {
   border: 1px solid #c084fc;
   border-radius: 999px;
   padding: 0.46rem 0.86rem;
@@ -162,7 +163,8 @@ body {
 
 .launch-row button:hover,
 .control-strip button:hover,
-.games-card .secondary:hover {
+.games-card .secondary:hover,
+.primary-match-action:hover {
   transform: translateY(-1px);
   filter: brightness(1.05);
   box-shadow: 0 8px 18px rgba(168, 85, 247, 0.36);
@@ -270,6 +272,12 @@ body {
   font-size: 0.82rem;
 }
 
+.match-meta-line {
+  margin: 0.35rem 0 0;
+  color: #cbd5e1;
+  font-size: 0.79rem;
+}
+
 .games-card .secondary {
   margin-top: 0.7rem;
   width: 100%;
@@ -279,6 +287,23 @@ body {
 .stage-header p {
   margin: 0.3rem 0 0;
   color: #cbd5e1;
+}
+
+.stage-action-row {
+  margin-top: 0.55rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.status-pill {
+  border: 1px solid rgba(196, 181, 253, 0.5);
+  border-radius: 999px;
+  padding: 0.26rem 0.62rem;
+  font-size: 0.76rem;
+  color: #e2e8f0;
+  background: rgba(79, 70, 229, 0.22);
 }
 
 .game-hud {
@@ -299,6 +324,12 @@ body {
   font-size: 0.82rem;
 }
 
+.stage-note {
+  margin: 0.24rem 0 0;
+  color: #cbd5e1;
+  font-size: 0.78rem;
+}
+
 .board-canvas {
   margin-top: 0.58rem;
   height: clamp(420px, 71vh, 860px);
@@ -317,21 +348,12 @@ body {
   flex-wrap: wrap;
 }
 
-.queued-panel {
-  margin-top: 0.7rem;
-  border: 1px solid rgba(148, 163, 184, 0.36);
-  border-radius: 0.8rem;
-  padding: 0.68rem;
-  background: rgba(30, 27, 75, 0.3);
-}
-
-.queued-panel p {
-  margin: 0;
-  color: #cbd5e1;
-}
-
-.queued-panel p + p {
-  margin-top: 0.35rem;
+.control-strip button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  filter: none;
 }
 
 @media (max-width: 1020px) {
