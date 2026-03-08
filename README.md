@@ -11,6 +11,20 @@ npm run dev
 
 Then open the local URL printed by Vite.
 
+## Quality checks
+
+```bash
+npm run lint
+npm run test
+npm run build
+```
+
+Or run the combined gate:
+
+```bash
+npm run quality
+```
+
 ## What this build includes
 
 - Clickable 3D board rendered with Three.js via React Three Fiber

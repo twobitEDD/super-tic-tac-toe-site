@@ -21,7 +21,9 @@ self.addEventListener("activate", (event) => {
     caches
       .keys()
       .then((keys) =>
-        Promise.all(keys.map((key) => (key === CACHE_NAME ? Promise.resolve() : caches.delete(key)))),
+        Promise.all(
+          keys.map((key) => (key === CACHE_NAME ? Promise.resolve() : caches.delete(key))),
+        ),
       )
       .then(() => self.clients.claim()),
   );

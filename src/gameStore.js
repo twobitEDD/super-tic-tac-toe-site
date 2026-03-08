@@ -138,7 +138,8 @@ export const loadGameStore = () => {
     const hydratedGames = hydrateGames(parsed?.games);
     const games = hydratedGames.length > 0 ? hydratedGames : createDefaultStore().games;
     const activeGameId =
-      typeof parsed?.activeGameId === "string" && games.some((game) => game.id === parsed.activeGameId)
+      typeof parsed?.activeGameId === "string" &&
+      games.some((game) => game.id === parsed.activeGameId)
         ? parsed.activeGameId
         : games[0].id;
     const activeGame = games.find((game) => game.id === activeGameId) ?? games[0];

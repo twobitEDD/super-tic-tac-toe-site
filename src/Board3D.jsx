@@ -1,5 +1,11 @@
 import { Cloud, OrbitControls, Sparkles, Stars } from "@react-three/drei";
-import { Bloom, ChromaticAberration, EffectComposer, Noise, Vignette } from "@react-three/postprocessing";
+import {
+  Bloom,
+  ChromaticAberration,
+  EffectComposer,
+  Noise,
+  Vignette,
+} from "@react-three/postprocessing";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import { BlendFunction } from "postprocessing";
@@ -138,7 +144,9 @@ const GravityWave = ({ x, y, cellSize, animationToken }) => {
 
   return (
     <mesh ref={ringRef} position={[x, y, 0.13]}>
-      <torusGeometry args={[Math.max(cellSize * 0.22, 0.1), Math.max(cellSize * 0.025, 0.015), 16, 72]} />
+      <torusGeometry
+        args={[Math.max(cellSize * 0.22, 0.1), Math.max(cellSize * 0.025, 0.015), 16, 72]}
+      />
       <meshBasicMaterial ref={ringMaterialRef} color="#f0abfc" transparent opacity={0.5} />
     </mesh>
   );
@@ -161,7 +169,15 @@ const VaporwaveBackdrop = ({ totalSpan }) => {
 
   return (
     <>
-      <Stars radius={starRadius} depth={58} count={420} factor={3.5} saturation={0} fade speed={0.3} />
+      <Stars
+        radius={starRadius}
+        depth={58}
+        count={420}
+        factor={3.5}
+        saturation={0}
+        fade
+        speed={0.3}
+      />
       <Sparkles
         count={220}
         scale={[gridWidth * 0.9, gridHeight * 0.9, 32]}
@@ -253,7 +269,11 @@ const BoardScene = ({ game, onCellClick, layout }) => {
       <hemisphereLight args={["#ffe4ff", "#dbeafe", 0.78]} />
       <ambientLight intensity={0.64} />
       <directionalLight position={[1.5, 2, 8]} intensity={0.84} />
-      <pointLight position={[totalSpan * 0.2, totalSpan * 0.24, 11]} intensity={0.7} color="#f9a8d4" />
+      <pointLight
+        position={[totalSpan * 0.2, totalSpan * 0.24, 11]}
+        intensity={0.7}
+        color="#f9a8d4"
+      />
       <pointLight
         position={[-totalSpan * 0.24, -totalSpan * 0.26, 12]}
         intensity={0.58}
@@ -294,7 +314,9 @@ const BoardScene = ({ game, onCellClick, layout }) => {
           <group key={`board-${boardIndex}`}>
             {boardPlayable && !boardResolved && !gameOver ? (
               <mesh position={[center.x, center.y, -0.03]}>
-                <planeGeometry args={[boardSpan + lineThickness * 1.6, boardSpan + lineThickness * 1.6]} />
+                <planeGeometry
+                  args={[boardSpan + lineThickness * 1.6, boardSpan + lineThickness * 1.6]}
+                />
                 <meshStandardMaterial color="#f0abfc" transparent opacity={0.22} />
               </mesh>
             ) : null}
@@ -346,8 +368,7 @@ const BoardScene = ({ game, onCellClick, layout }) => {
                 }
               }
 
-              const disabled =
-                gameOver || boardResolved || !boardPlayable || cellValue !== null;
+              const disabled = gameOver || boardResolved || !boardPlayable || cellValue !== null;
 
               return (
                 <group key={`cell-${boardIndex}-${cellIndex}`}>
