@@ -14,40 +14,17 @@ import {
 const FIXED_SIZE = 3;
 const STORAGE_KEY = "super-ttt-focused-v1";
 const LEGACY_STORE_KEY = "super-tic-tac-toe-save-v1";
-const GLOBAL_MAP_ROWS = 22;
-const GLOBAL_MAP_COLS = 40;
-const GLOBAL_MAP_TOTAL = GLOBAL_MAP_ROWS * GLOBAL_MAP_COLS;
-
-const PLAYER_COLORS = [
-  { id: "plasma-pink", name: "Plasma Pink", hex: "#ff4fc8" },
-  { id: "neon-cyan", name: "Neon Cyan", hex: "#4ef4f1" },
-  { id: "solar-gold", name: "Solar Gold", hex: "#facc15" },
-  { id: "orbit-violet", name: "Orbit Violet", hex: "#8b5cf6" },
-  { id: "ember-red", name: "Ember Red", hex: "#ef4444" },
-  { id: "aurora-green", name: "Aurora Green", hex: "#22c55e" },
-  { id: "sky-indigo", name: "Sky Indigo", hex: "#6366f1" },
-  { id: "sunset-orange", name: "Sunset Orange", hex: "#f97316" },
-  { id: "frost-blue", name: "Frost Blue", hex: "#38bdf8" },
-  { id: "nova-lime", name: "Nova Lime", hex: "#84cc16" },
-  { id: "arcade-purple", name: "Arcade Purple", hex: "#a855f7" },
-  { id: "pearl-white", name: "Pearl White", hex: "#f8fafc" },
+const BACKDROP_OUTLINE_CELL_COUNT = 2400;
+const BACKDROP_OUTLINE_COLUMNS = 60;
+const KNOWN_GAMES = [
+  { id: "super-ttt", name: "Super Tic-Tac-Toe", mode: "Live", description: "Classic arena duel." },
+  { id: "orbital-bobble", name: "Orbital Bobble 3000", mode: "Queued", description: "Coming soon." },
+  { id: "kombat-58", name: "Mortal Kombat 58", mode: "Queued", description: "Coming soon." },
+  { id: "astro-racer", name: "Astro Racer Neon", mode: "Queued", description: "Coming soon." },
 ];
-
-const PLAYER_COLOR_BY_ID = Object.fromEntries(PLAYER_COLORS.map((entry) => [entry.id, entry]));
-const CHALLENGER_NAMES = [
-  "RookRift",
-  "NovaThread",
-  "PixelNomad",
-  "OrbitForge",
-  "GlowPilot",
-  "HexJockey",
-  "GridWarden",
-  "CometLoop",
-];
-const CHALLENGE_MODES = ["Classic 3x3", "Speed Blitz", "Fog Rules", "No Mirror"];
 
 const isMarker = (value) => value === "X" || value === "O";
-const isPlayerColorId = (value) => typeof value === "string" && Boolean(PLAYER_COLOR_BY_ID[value]);
+const isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0;
 
 const countMoves = (boards) =>
   boards.reduce(
@@ -55,48 +32,7 @@ const countMoves = (boards) =>
     0,
   );
 
-const getGlobalMapCoords = (index) => ({
-  row: Math.floor(index / GLOBAL_MAP_COLS),
-  col: index % GLOBAL_MAP_COLS,
-});
-
-const buildHistoricalPixelMap = () =>
-  Array.from(
-    { length: GLOBAL_MAP_TOTAL },
-    (_, index) =>
-      PLAYER_COLORS[(index * 7 + Math.floor(index / GLOBAL_MAP_COLS) * 5 + (index % GLOBAL_MAP_COLS)) % PLAYER_COLORS.length]
-        .id,
-  );
-
-const buildPixelBackdrop = () =>
-  Array.from(
-    { length: 1900 },
-    (_, index) => PLAYER_COLORS[(index * 11 + Math.floor(index / 55) * 3) % PLAYER_COLORS.length].id,
-  );
-
-const buildInitialPixelRequests = () => {
-  const requests = {};
-  for (let index = 0; index < GLOBAL_MAP_TOTAL; index += 1) {
-    if ((index * 17 + 11) % 13 !== 0) {
-      continue;
-    }
-    requests[index] = {
-      id: `request-${index}`,
-      challenger: CHALLENGER_NAMES[(index * 5) % CHALLENGER_NAMES.length],
-      mode: CHALLENGE_MODES[index % CHALLENGE_MODES.length],
-      stake: 25 + (index % 6) * 15,
-      queued: `${(index % 18) + 2}m ago`,
-    };
-  }
-  return requests;
-};
-
-const HISTORICAL_PIXEL_MAP = buildHistoricalPixelMap();
-const PIXEL_BACKDROP = buildPixelBackdrop();
-const INITIAL_PIXEL_REQUESTS = buildInitialPixelRequests();
-const INITIAL_SELECTED_PIXEL = Number(Object.keys(INITIAL_PIXEL_REQUESTS)[0] ?? 0);
-
-const getColorById = (id) => PLAYER_COLOR_BY_ID[id] ?? PLAYER_COLORS[0];
+const OUTLINE_CELLS = Array.from({ length: BACKDROP_OUTLINE_CELL_COUNT }, (_, index) => index);
 
 const coerceToClassicGame = (rawGame) => {
   const base = createInitialGameState(FIXED_SIZE);
@@ -168,7 +104,8 @@ const loadSession = () => {
   const defaultSession = {
     game: createInitialGameState(FIXED_SIZE),
     soundEnabled: true,
-    profileColorId: PLAYER_COLORS[0].id,
+    accountHandle: "SpaceCowboy",
+    selectedGameId: "super-ttt",
   };
   if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
     return defaultSession;
@@ -181,7 +118,13 @@ const loadSession = () => {
       return {
         game: coerceToClassicGame(parsed?.game),
         soundEnabled: parsed?.soundEnabled !== false,
-        profileColorId: isPlayerColorId(parsed?.profileColorId) ? parsed.profileColorId : PLAYER_COLORS[0].id,
+        accountHandle: isNonEmptyString(parsed?.accountHandle)
+          ? parsed.accountHandle.trim().slice(0, 24)
+          : defaultSession.accountHandle,
+        selectedGameId:
+          KNOWN_GAMES.some((gameEntry) => gameEntry.id === parsed?.selectedGameId)
+            ? parsed.selectedGameId
+            : defaultSession.selectedGameId,
       };
     }
 
@@ -202,7 +145,8 @@ const loadSession = () => {
     return {
       game: coerceToClassicGame(activeLegacyGame),
       soundEnabled: parsedLegacy?.soundEnabled !== false,
-      profileColorId: PLAYER_COLORS[0].id,
+      accountHandle: defaultSession.accountHandle,
+      selectedGameId: defaultSession.selectedGameId,
     };
   } catch {
     return defaultSession;
@@ -216,7 +160,8 @@ const saveSession = (session) => {
   const payload = {
     game: session.game,
     soundEnabled: session.soundEnabled,
-    profileColorId: session.profileColorId,
+    accountHandle: session.accountHandle,
+    selectedGameId: session.selectedGameId,
   };
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 };
@@ -229,21 +174,14 @@ const boardLabel = (boardIndex, size) => {
 const App = () => {
   const [session, setSession] = useState(() => loadSession());
   const game = session.game;
-  const [pixelRequests, setPixelRequests] = useState(() => ({ ...INITIAL_PIXEL_REQUESTS }));
-  const [pixelClaims, setPixelClaims] = useState({});
-  const [selectedPixelIndex, setSelectedPixelIndex] = useState(INITIAL_SELECTED_PIXEL);
+  const [view, setView] = useState("landing");
 
   const allowedBoards = useMemo(() => getAllowedBoardIndexes(game), [game]);
-  const activeProfileColor = useMemo(
-    () => getColorById(session.profileColorId),
-    [session.profileColorId],
+  const selectedGame = useMemo(
+    () => KNOWN_GAMES.find((gameEntry) => gameEntry.id === session.selectedGameId) ?? KNOWN_GAMES[0],
+    [session.selectedGameId],
   );
-  const activeRequestCount = Object.keys(pixelRequests).length;
-  const renderedPixelCount = Object.keys(pixelClaims).length;
-  const selectedRequest = pixelRequests[selectedPixelIndex] ?? null;
-  const selectedClaimColorId = pixelClaims[selectedPixelIndex];
-  const selectedClaimColor = selectedClaimColorId ? getColorById(selectedClaimColorId) : null;
-  const selectedCoords = getGlobalMapCoords(selectedPixelIndex);
+  const selectedGameIsPlayable = selectedGame.id === "super-ttt";
 
   useEffect(() => {
     saveSession(session);
@@ -309,179 +247,140 @@ const App = () => {
     }));
   };
 
-  const handleClaimPixel = () => {
-    setPixelClaims((currentClaims) => ({
-      ...currentClaims,
-      [selectedPixelIndex]: session.profileColorId,
-    }));
-  };
-
-  const handleAcceptRequest = () => {
-    if (!selectedRequest) {
-      return;
-    }
-
-    setPixelClaims((currentClaims) => ({
-      ...currentClaims,
-      [selectedPixelIndex]: session.profileColorId,
-    }));
-    setPixelRequests((currentRequests) => {
-      const next = { ...currentRequests };
-      delete next[selectedPixelIndex];
-      return next;
-    });
-  };
-
   return (
-    <main className="landing-shell">
-      <div className="pixelmap-backdrop" aria-hidden="true">
-        {PIXEL_BACKDROP.map((colorId, index) => (
-          <span
-            key={`bg-${index}`}
-            className="pixelmap-backdrop-cell"
-            style={{ "--bg-pixel": getColorById(colorId).hex }}
-          />
+    <main className="arcade-shell">
+      <div
+        className="empty-pixelmap-backdrop"
+        style={{ "--outline-columns": BACKDROP_OUTLINE_COLUMNS }}
+        aria-hidden="true"
+      >
+        {OUTLINE_CELLS.map((index) => (
+          <span key={`outline-${index}`} className="outline-cell" />
         ))}
       </div>
 
-      <section className="hero-card">
-        <p className="eyebrow">Concept Prototype</p>
-        <h1>Pixelmap Arena</h1>
-        <p>
-          Every match ever played becomes a pixel on one persistent global map. Players choose one of 12 identity
-          colors, accept incoming challenges on specific coordinates, and stamp their win color into world history.
-        </p>
-        <div className="hero-metrics">
-          <div>
-            <span>Historic Pixels</span>
-            <strong>3,248,900</strong>
+      {view === "landing" ? (
+        <section className="landing-card">
+          <p className="badge-line">Arcade Protocol // 2070</p>
+          <h1>Nebula Showdown Grid</h1>
+          <p>
+            Boot into the arcade hub, pick a known game, and battle in a neon arena where the world pixelmap lives as an
+            empty outlined grid behind every fight.
+          </p>
+          <div className="landing-flow">
+            <div>
+              <h2>1. Enter Lobby</h2>
+              <p>Open the hub with your account and roster.</p>
+            </div>
+            <div>
+              <h2>2. Pick Known Game</h2>
+              <p>Super Tic-Tac-Toe is live, others are queued.</p>
+            </div>
+            <div>
+              <h2>3. Hit The Arena</h2>
+              <p>The game runs over a blank outlined pixelmap field.</p>
+            </div>
           </div>
-          <div>
-            <span>Active Requests</span>
-            <strong>{activeRequestCount}</strong>
-          </div>
-          <div>
-            <span>Your Rendered Pixels</span>
-            <strong>{renderedPixelCount}</strong>
-          </div>
-        </div>
-      </section>
-
-      <section className="concept-grid">
-        <article className="global-map-card">
-          <header>
-            <h2>Global Pixelmap</h2>
+          <div className="launch-row">
+            <button type="button" onClick={() => setView("arcade")}>
+              Enter Arcade Hub
+            </button>
             <p>
-              Select any coordinate to inspect queued duels, accept a request, and render your identity color onto that
-              pixel.
+              Pilot: <strong>{session.accountHandle}</strong> • Live mode ready
             </p>
-          </header>
-          <div className="global-map" style={{ "--map-columns": GLOBAL_MAP_COLS }}>
-            {HISTORICAL_PIXEL_MAP.map((historicalColorId, index) => {
-              const claimColorId = pixelClaims[index];
-              const resolvedColor = claimColorId ? getColorById(claimColorId).hex : getColorById(historicalColorId).hex;
-              const hasRequest = Boolean(pixelRequests[index]);
-              const isSelected = index === selectedPixelIndex;
-
-              return (
-                <button
-                  key={`pixel-${index}`}
-                  type="button"
-                  className={[
-                    "global-pixel",
-                    hasRequest ? "has-request" : "",
-                    isSelected ? "is-selected" : "",
-                    claimColorId ? "is-claimed" : "",
-                  ]
-                    .join(" ")
-                    .trim()}
-                  style={{ "--pixel-color": resolvedColor }}
-                  onClick={() => setSelectedPixelIndex(index)}
-                  aria-label={`Pixel row ${Math.floor(index / GLOBAL_MAP_COLS) + 1}, column ${(index % GLOBAL_MAP_COLS) + 1}`}
-                />
-              );
-            })}
           </div>
-        </article>
-
-        <aside className="request-card">
-          <h2>Player Identity (12 Colors)</h2>
-          <div className="palette-grid">
-            {PLAYER_COLORS.map((color) => (
-              <button
-                key={color.id}
-                type="button"
-                className={`palette-swatch ${session.profileColorId === color.id ? "is-active" : ""}`}
-                style={{ "--swatch-color": color.hex }}
-                onClick={() =>
+        </section>
+      ) : (
+        <section className="arcade-layout">
+          <aside className="hub-panel">
+            <article className="card account-card">
+              <h2>User Account</h2>
+              <p>Customize your pilot handle for arcade sessions.</p>
+              <label htmlFor="account-handle">Pilot Handle</label>
+              <input
+                id="account-handle"
+                type="text"
+                value={session.accountHandle}
+                maxLength={24}
+                onChange={(event) =>
                   setSession((current) => ({
                     ...current,
-                    profileColorId: color.id,
+                    accountHandle: event.target.value,
                   }))
                 }
-                aria-label={`Use ${color.name}`}
               />
-            ))}
-          </div>
-          <p className="active-color-line">
-            You are rendering as <strong>{activeProfileColor.name}</strong>
-          </p>
+              <p className="account-meta">Rank: Neon Cadet • Credits: 12,800</p>
+            </article>
 
-          <div className="pixel-request-summary">
-            <h3>
-              Pixel ({selectedCoords.row + 1}, {selectedCoords.col + 1})
-            </h3>
-            {selectedRequest ? (
+            <article className="card games-card">
+              <h2>Known Games</h2>
+              <ul className="known-games-list">
+                {KNOWN_GAMES.map((gameEntry) => (
+                  <li key={gameEntry.id}>
+                    <button
+                      type="button"
+                      className={session.selectedGameId === gameEntry.id ? "is-active" : ""}
+                      onClick={() =>
+                        setSession((current) => ({
+                          ...current,
+                          selectedGameId: gameEntry.id,
+                        }))
+                      }
+                    >
+                      <span>{gameEntry.name}</span>
+                      <small>{gameEntry.mode}</small>
+                    </button>
+                    <p>{gameEntry.description}</p>
+                  </li>
+                ))}
+              </ul>
+              <button type="button" className="secondary" onClick={() => setView("landing")}>
+                Back To Landing
+              </button>
+            </article>
+          </aside>
+
+          <section className="game-stage card">
+            <header className="stage-header">
+              <h2>{selectedGame.name}</h2>
+              <p>{selectedGameIsPlayable ? "Live match room is active." : "Queued game module, waiting for release."}</p>
+            </header>
+
+            {selectedGameIsPlayable ? (
               <>
-                <p>
-                  <strong>{selectedRequest.challenger}</strong> queued a <strong>{selectedRequest.mode}</strong> duel.
-                </p>
-                <p className="micro-copy">
-                  Stake: {selectedRequest.stake} points • queued {selectedRequest.queued}
-                </p>
-                <button type="button" onClick={handleAcceptRequest}>
-                  Accept Challenge & Render
-                </button>
+                <div className="game-hud">
+                  <p className="status-line">{statusText}</p>
+                  <p className="meta-line">Classic mode: 9 local boards • Moves: {game.moveCount}</p>
+                </div>
+
+                <Board3D game={game} onCellClick={handleCellClick} />
+
+                <div className="control-strip">
+                  <button type="button" onClick={handleRestart}>
+                    New Game
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSession((current) => ({ ...current, soundEnabled: !current.soundEnabled }))
+                    }
+                  >
+                    Sound: {session.soundEnabled ? "On" : "Off"}
+                  </button>
+                </div>
               </>
             ) : (
-              <p>No open request for this coordinate right now.</p>
+              <div className="queued-panel">
+                <p>
+                  <strong>{selectedGame.name}</strong> is listed in the known games roster, but this cabinet is still
+                  warming up.
+                </p>
+                <p>Switch to Super Tic-Tac-Toe to play now.</p>
+              </div>
             )}
-
-            {selectedClaimColor ? (
-              <p className="micro-copy">
-                Current rendered owner color: <strong>{selectedClaimColor.name}</strong>
-              </p>
-            ) : null}
-            <button type="button" className="secondary" onClick={handleClaimPixel}>
-              Render My Color Here
-            </button>
-          </div>
-        </aside>
-      </section>
-
-      <section className="game-focus-card">
-        <div className="game-hud">
-          <h2>Live Duel Sandbox</h2>
-          <p className="status-line">{statusText}</p>
-          <p className="meta-line">Classic mode: 9 local boards • Moves: {game.moveCount}</p>
-        </div>
-
-        <Board3D game={game} onCellClick={handleCellClick} />
-
-        <div className="control-strip">
-          <button type="button" onClick={handleRestart}>
-            New Game
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              setSession((current) => ({ ...current, soundEnabled: !current.soundEnabled }))
-            }
-          >
-            Sound: {session.soundEnabled ? "On" : "Off"}
-          </button>
-        </div>
-      </section>
+          </section>
+        </section>
+      )}
     </main>
   );
 };
