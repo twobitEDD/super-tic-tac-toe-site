@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Board3D from "./Board3D";
 import { createInitialGameState, getAllowedBoardIndexes, indexToCoords, makeMove } from "./gameLogic";
 import {
@@ -10,6 +10,17 @@ import {
   playSuperWinSfx,
   playXMoveSfx,
 } from "./soundEffects";
+import { createDynamicAccountIdentity } from "./accountIdentity";
+import {
+  appendMoveToSave,
+  buildReplayFrames,
+  createMatchSave,
+  createMoveEvent,
+  matchSummaryFromSave,
+  parseMatchSave,
+  serializeMatchSave,
+} from "./matchSave";
+import { loadLocalMatchSaves, upsertLocalMatchSave } from "./matchSaveStore";
 
 const FIXED_SIZE = 3;
 const STORAGE_KEY = "super-ttt-focused-v1";
@@ -66,8 +77,7 @@ const MATCH_STATUS_LABEL = {
 
 const isMarker = (value) => value === "X" || value === "O";
 const isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0;
-const isKnownMatchId = (value) =>
-  typeof value === "string" && KNOWN_MATCHES.some((matchEntry) => matchEntry.id === value);
+const isKnownMatchId = (value) => typeof value === "string" && KNOWN_MATCHES.some((entry) => entry.id === value);
 
 const countMoves = (boards) =>
   boards.reduce(
@@ -76,6 +86,57 @@ const countMoves = (boards) =>
   );
 
 const OUTLINE_CELLS = Array.from({ length: BACKDROP_OUTLINE_CELL_COUNT }, (_, index) => index);
+
+const formatRelativeTime = (timestampMs) => {
+  if (!Number.isFinite(timestampMs)) {
+    return "just now";
+  }
+  const diffMs = Date.now() - timestampMs;
+  const diffMinutes = Math.max(Math.floor(diffMs / 60000), 0);
+  if (diffMinutes < 1) {
+    return "just now";
+  }
+  if (diffMinutes < 60) {
+    return `${diffMinutes}m ago`;
+  }
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) {
+    return `${diffHours}h ago`;
+  }
+  return `${Math.floor(diffHours / 24)}d ago`;
+};
+
+const mergeKnownMatches = (saveMap) => {
+  const merged = new Map(KNOWN_MATCHES.map((match) => [match.id, { ...match, updatedAtEpoch: null }]));
+
+  for (const save of Object.values(saveMap)) {
+    const localSummary = matchSummaryFromSave(save);
+    const existing = merged.get(localSummary.id);
+    if (existing) {
+      merged.set(localSummary.id, {
+        ...existing,
+        status: localSummary.status,
+        claimer: localSummary.claimer,
+        challenger: localSummary.challenger,
+        winner: localSummary.winner,
+        updatedAt: formatRelativeTime(localSummary.updatedAtEpoch),
+        updatedAtEpoch: localSummary.updatedAtEpoch,
+        hasLocalSave: true,
+      });
+    } else {
+      merged.set(localSummary.id, {
+        ...localSummary,
+        updatedAt: formatRelativeTime(localSummary.updatedAtEpoch),
+      });
+    }
+  }
+
+  return Array.from(merged.values()).sort((a, b) => {
+    const aRank = Number.isFinite(a.updatedAtEpoch) ? a.updatedAtEpoch : 0;
+    const bRank = Number.isFinite(b.updatedAtEpoch) ? b.updatedAtEpoch : 0;
+    return bRank - aRank;
+  });
+};
 
 const getMatchNarrative = (matchEntry) => {
   const coord = `Pixel (${matchEntry.pixel.row}, ${matchEntry.pixel.col})`;
@@ -236,16 +297,24 @@ const boardLabel = (boardIndex, size) => {
 
 const App = () => {
   const [session, setSession] = useState(() => loadSession());
-  const game = session.game;
+  const [localMatchSaves, setLocalMatchSaves] = useState(() => loadLocalMatchSaves());
   const [view, setView] = useState("landing");
   const [arenaMode, setArenaMode] = useState("watch");
+  const [recordingMatchId, setRecordingMatchId] = useState(null);
+  const [playbackFrames, setPlaybackFrames] = useState([]);
+  const [playbackIndex, setPlaybackIndex] = useState(0);
+  const [playbackRunning, setPlaybackRunning] = useState(false);
+  const importInputRef = useRef(null);
+  const game = session.game;
 
+  const knownMatches = useMemo(() => mergeKnownMatches(localMatchSaves), [localMatchSaves]);
   const allowedBoards = useMemo(() => getAllowedBoardIndexes(game), [game]);
   const selectedMatch = useMemo(
-    () => KNOWN_MATCHES.find((matchEntry) => matchEntry.id === session.selectedMatchId) ?? KNOWN_MATCHES[0],
-    [session.selectedMatchId],
+    () => knownMatches.find((matchEntry) => matchEntry.id === session.selectedMatchId) ?? knownMatches[0],
+    [knownMatches, session.selectedMatchId],
   );
   const selectedMatchNarrative = useMemo(() => getMatchNarrative(selectedMatch), [selectedMatch]);
+  const selectedMatchSave = localMatchSaves[selectedMatch.id] ?? null;
   const interactionLocked = arenaMode !== "join";
 
   useEffect(() => {
@@ -261,6 +330,36 @@ const App = () => {
       setArenaMode("watch");
     }
   }, [arenaMode, selectedMatch.status]);
+
+  useEffect(() => {
+    if (!playbackRunning || playbackFrames.length === 0) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setPlaybackIndex((currentIndex) => {
+        if (currentIndex >= playbackFrames.length - 1) {
+          setPlaybackRunning(false);
+          return currentIndex;
+        }
+        return currentIndex + 1;
+      });
+    }, 700);
+    return () => window.clearInterval(timer);
+  }, [playbackFrames.length, playbackRunning]);
+
+  useEffect(() => {
+    if (playbackFrames.length === 0) {
+      return;
+    }
+    const frame = playbackFrames[playbackIndex];
+    if (!frame) {
+      return;
+    }
+    setSession((current) => ({
+      ...current,
+      game: frame,
+    }));
+  }, [playbackFrames, playbackIndex]);
 
   const statusText = useMemo(() => {
     if (game.winner) {
@@ -283,10 +382,42 @@ const App = () => {
       return `Challenge active on pixel (${selectedMatch.pixel.row}, ${selectedMatch.pixel.col}). ${statusText}`;
     }
     if (arenaMode === "rewatch") {
-      return `Re-watch mode: winner ${selectedMatch.winner} on pixel (${selectedMatch.pixel.row}, ${selectedMatch.pixel.col}).`;
+      return `Re-watch mode: winner ${selectedMatch.winner ?? "TBD"} on pixel (${selectedMatch.pixel.row}, ${selectedMatch.pixel.col}).`;
     }
     return `Spectating ${selectedMatch.id} on pixel (${selectedMatch.pixel.row}, ${selectedMatch.pixel.col}).`;
   }, [arenaMode, selectedMatch.id, selectedMatch.pixel.col, selectedMatch.pixel.row, selectedMatch.winner, statusText]);
+
+  const upsertAndTrackSave = (save) => {
+    const nextMap = upsertLocalMatchSave(save);
+    setLocalMatchSaves(nextMap);
+  };
+
+  const startRecordingForSelectedMatch = () => {
+    const account = createDynamicAccountIdentity({ handle: session.accountHandle });
+    const baselineSave =
+      localMatchSaves[selectedMatch.id] ??
+      createMatchSave({
+        matchId: selectedMatch.id,
+        matchTitle: selectedMatch.title,
+        pixel: selectedMatch.pixel,
+        claimer: selectedMatch.claimer,
+        challenger: session.accountHandle,
+        account,
+      });
+
+    const nextSave = {
+      ...baselineSave,
+      players: {
+        ...baselineSave.players,
+        challenger: baselineSave.players.challenger ?? session.accountHandle,
+      },
+      account,
+      updatedAt: Date.now(),
+    };
+
+    upsertAndTrackSave(nextSave);
+    setRecordingMatchId(selectedMatch.id);
+  };
 
   const handleCellClick = (boardIndex, cellIndex) => {
     const nextGame = makeMove(game, boardIndex, cellIndex);
@@ -319,6 +450,27 @@ const App = () => {
       playInterTurnSfx(session.soundEnabled);
     }
 
+    if (arenaMode === "join" && recordingMatchId === selectedMatch.id) {
+      const existingSave =
+        localMatchSaves[selectedMatch.id] ??
+        createMatchSave({
+          matchId: selectedMatch.id,
+          matchTitle: selectedMatch.title,
+          pixel: selectedMatch.pixel,
+          claimer: selectedMatch.claimer,
+          challenger: session.accountHandle,
+          account: createDynamicAccountIdentity({ handle: session.accountHandle }),
+        });
+      const moveEvent = createMoveEvent({
+        boardIndex,
+        cellIndex,
+        player: game.currentPlayer,
+        accountHandle: session.accountHandle,
+      });
+      const updatedSave = appendMoveToSave(existingSave, moveEvent, nextGame);
+      upsertAndTrackSave(updatedSave);
+    }
+
     setSession((current) => ({
       ...current,
       game: nextGame,
@@ -334,6 +486,9 @@ const App = () => {
   };
 
   const handleRestart = () => {
+    setPlaybackRunning(false);
+    setPlaybackFrames([]);
+    setPlaybackIndex(0);
     setSession((current) => ({
       ...current,
       game: createInitialGameState(FIXED_SIZE),
@@ -341,7 +496,10 @@ const App = () => {
   };
 
   const handleSelectKnownMatch = (matchId) => {
-    const nextMatch = KNOWN_MATCHES.find((matchEntry) => matchEntry.id === matchId) ?? KNOWN_MATCHES[0];
+    const nextMatch = knownMatches.find((matchEntry) => matchEntry.id === matchId) ?? knownMatches[0];
+    setPlaybackRunning(false);
+    setPlaybackFrames([]);
+    setPlaybackIndex(0);
     setSession((current) => ({
       ...current,
       selectedMatchId: nextMatch.id,
@@ -355,8 +513,13 @@ const App = () => {
   };
 
   const handlePrimaryAction = () => {
+    setPlaybackRunning(false);
+    setPlaybackFrames([]);
+    setPlaybackIndex(0);
+
     if (selectedMatch.status === "claim-open") {
       setArenaMode("join");
+      startRecordingForSelectedMatch();
       setSession((current) => ({
         ...current,
         game: createInitialGameState(FIXED_SIZE),
@@ -368,6 +531,58 @@ const App = () => {
       return;
     }
     setArenaMode("watch");
+  };
+
+  const handleReplaySelectedSave = () => {
+    if (!selectedMatchSave || selectedMatchSave.events.length === 0) {
+      playInvalidSfx(session.soundEnabled);
+      return;
+    }
+    const frames = buildReplayFrames(selectedMatchSave);
+    if (frames.length <= 1) {
+      playInvalidSfx(session.soundEnabled);
+      return;
+    }
+    setArenaMode("rewatch");
+    setPlaybackFrames(frames);
+    setPlaybackIndex(0);
+    setPlaybackRunning(true);
+  };
+
+  const handleExportSelectedSave = () => {
+    if (!selectedMatchSave) {
+      playInvalidSfx(session.soundEnabled);
+      return;
+    }
+    const fileContents = serializeMatchSave(selectedMatchSave);
+    const blob = new Blob([fileContents], { type: "application/json" });
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${selectedMatch.id}.json`;
+    anchor.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleImportSaveFile = async (event) => {
+    const [file] = event.target.files ?? [];
+    if (!file) {
+      return;
+    }
+    try {
+      const fileContents = await file.text();
+      const parsedSave = parseMatchSave(fileContents);
+      const nextMap = upsertLocalMatchSave(parsedSave);
+      setLocalMatchSaves(nextMap);
+      setSession((current) => ({
+        ...current,
+        selectedMatchId: parsedSave.matchId,
+      }));
+    } catch {
+      playInvalidSfx(session.soundEnabled);
+    } finally {
+      event.target.value = "";
+    }
   };
 
   return (
@@ -401,7 +616,7 @@ const App = () => {
             </div>
             <div>
               <h2>3. Watch / Join / Re-watch</h2>
-              <p>Outcome tracks claimer, challenger, and winner.</p>
+              <p>Local saves use event logs so playback remains natural.</p>
             </div>
           </div>
           <div className="launch-row">
@@ -409,7 +624,7 @@ const App = () => {
               Enter Arcade Hub
             </button>
             <p>
-              Pilot: <strong>{session.accountHandle}</strong> • Matches tracked: {KNOWN_MATCHES.length}
+              Pilot: <strong>{session.accountHandle}</strong> • Local saves: {Object.keys(localMatchSaves).length}
             </p>
           </div>
         </section>
@@ -418,7 +633,7 @@ const App = () => {
           <aside className="hub-panel">
             <article className="card account-card">
               <h2>User Account</h2>
-              <p>Customize your pilot handle for arcade sessions.</p>
+              <p>Dynamic.xyz account model (local stub until SDK wiring).</p>
               <label htmlFor="account-handle">Pilot Handle</label>
               <input
                 id="account-handle"
@@ -432,13 +647,13 @@ const App = () => {
                   }))
                 }
               />
-              <p className="account-meta">Rank: Neon Cadet • Credits: 12,800</p>
+              <p className="account-meta">Provider: dynamic.xyz • Credits: 12,800</p>
             </article>
 
             <article className="card games-card">
               <h2>Known SuperTicTacToe Games</h2>
               <ul className="known-games-list">
-                {KNOWN_MATCHES.map((matchEntry) => (
+                {knownMatches.map((matchEntry) => (
                   <li key={matchEntry.id}>
                     <button
                       type="button"
@@ -449,10 +664,32 @@ const App = () => {
                       <small>{MATCH_STATUS_LABEL[matchEntry.status]}</small>
                     </button>
                     <p className="match-meta-line">{getMatchNarrative(matchEntry)}</p>
-                    <p className="match-meta-line">Updated: {matchEntry.updatedAt}</p>
+                    <p className="match-meta-line">
+                      Updated: {matchEntry.updatedAt}
+                      {matchEntry.hasLocalSave ? " • local replay ready" : ""}
+                    </p>
                   </li>
                 ))}
               </ul>
+              <div className="save-action-row">
+                <button type="button" className="secondary" onClick={handleExportSelectedSave}>
+                  Export Save JSON
+                </button>
+                <button
+                  type="button"
+                  className="secondary alt"
+                  onClick={() => importInputRef.current?.click()}
+                >
+                  Import Save JSON
+                </button>
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept="application/json"
+                  onChange={handleImportSaveFile}
+                  className="file-input-hidden"
+                />
+              </div>
               <button type="button" className="secondary" onClick={() => setView("landing")}>
                 Back To Landing
               </button>
@@ -467,6 +704,9 @@ const App = () => {
                 <button type="button" className="primary-match-action" onClick={handlePrimaryAction}>
                   {getPrimaryActionLabel(selectedMatch)}
                 </button>
+                <button type="button" className="primary-match-action alt" onClick={handleReplaySelectedSave}>
+                  Play Saved Replay
+                </button>
                 <span className="status-pill">{MATCH_STATUS_LABEL[selectedMatch.status]}</span>
               </div>
             </header>
@@ -477,8 +717,9 @@ const App = () => {
               {interactionLocked ? (
                 <p className="stage-note">Board input is locked while watching/re-watching.</p>
               ) : (
-                <p className="stage-note">Challenge mode active: play to contest the claim.</p>
+                <p className="stage-note">Challenge mode active: event log is recording this match.</p>
               )}
+              {playbackRunning ? <p className="stage-note">Replay running… frame {playbackIndex + 1}</p> : null}
             </div>
 
             <Board3D game={game} onCellClick={handleStageCellClick} />

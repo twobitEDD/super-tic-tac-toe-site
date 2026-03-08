@@ -284,6 +284,26 @@ body {
   background: linear-gradient(180deg, #6366f1, #4338ca);
 }
 
+.games-card .secondary.alt,
+.primary-match-action.alt {
+  background: linear-gradient(180deg, #0ea5e9, #2563eb);
+  border-color: #7dd3fc;
+}
+
+.save-action-row {
+  margin-top: 0.7rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.save-action-row .secondary {
+  margin-top: 0;
+}
+
+.file-input-hidden {
+  display: none;
+}
+
 .stage-header p {
   margin: 0.3rem 0 0;
   color: #cbd5e1;
