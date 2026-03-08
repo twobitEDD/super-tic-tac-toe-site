@@ -32,58 +32,15 @@ const STORAGE_KEY = "super-ttt-focused-v1";
 const LEGACY_STORE_KEY = "super-tic-tac-toe-save-v1";
 const BACKDROP_OUTLINE_CELL_COUNT = 2400;
 const BACKDROP_OUTLINE_COLUMNS = 60;
-const KNOWN_MATCHES = [
-  {
-    id: "match-2070-114",
-    title: "Downtown Cabinet #114",
-    status: "claim-open",
-    pixel: { row: 6, col: 18 },
-    claimer: "RookRift",
-    challenger: null,
-    winner: null,
-    updatedAt: "2m ago",
-  },
-  {
-    id: "match-2070-113",
-    title: "Skyline Ladder #113",
-    status: "live",
-    pixel: { row: 11, col: 27 },
-    claimer: "NovaThread",
-    challenger: "GridWarden",
-    winner: null,
-    updatedAt: "live now",
-  },
-  {
-    id: "match-2070-108",
-    title: "Neon Orbit #108",
-    status: "completed",
-    pixel: { row: 14, col: 9 },
-    claimer: "PixelNomad",
-    challenger: "CometLoop",
-    winner: "CometLoop",
-    updatedAt: "14m ago",
-  },
-  {
-    id: "match-2070-101",
-    title: "Dustline Showdown #101",
-    status: "completed",
-    pixel: { row: 3, col: 33 },
-    claimer: "OrbitForge",
-    challenger: "GlowPilot",
-    winner: "OrbitForge",
-    updatedAt: "29m ago",
-  },
-];
 const MATCH_STATUS_LABEL = {
-  "claim-open": "Claimed / Open Challenge",
-  live: "Live Duel",
+  "claim-open": "Claim Open",
+  live: "Live",
   completed: "Completed",
 };
 
 const isMarker = (value) => value === "X" || value === "O";
 const isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0;
-const isKnownMatchId = (value) =>
-  typeof value === "string" && KNOWN_MATCHES.some((entry) => entry.id === value);
+const isMatchId = (value) => typeof value === "string" && value.trim().length > 0;
 
 const countMoves = (boards) =>
   boards.reduce(
@@ -113,44 +70,19 @@ const formatRelativeTime = (timestampMs) => {
   return `${Math.floor(diffHours / 24)}d ago`;
 };
 
-const mergeKnownMatches = (saveMap) => {
-  const merged = new Map(
-    KNOWN_MATCHES.map((match) => [match.id, { ...match, updatedAtEpoch: null }]),
-  );
-
-  for (const save of Object.values(saveMap)) {
-    const localSummary = matchSummaryFromSave(save);
-    const existing = merged.get(localSummary.id);
-    if (existing) {
-      merged.set(localSummary.id, {
-        ...existing,
-        status: localSummary.status,
-        claimer: localSummary.claimer,
-        challenger: localSummary.challenger,
-        winner: localSummary.winner,
-        updatedAt: formatRelativeTime(localSummary.updatedAtEpoch),
-        updatedAtEpoch: localSummary.updatedAtEpoch,
-        hasLocalSave: true,
-      });
-    } else {
-      merged.set(localSummary.id, {
-        ...localSummary,
-        updatedAt: formatRelativeTime(localSummary.updatedAtEpoch),
-      });
-    }
-  }
-
-  return Array.from(merged.values()).sort((a, b) => {
-    const aRank = Number.isFinite(a.updatedAtEpoch) ? a.updatedAtEpoch : 0;
-    const bRank = Number.isFinite(b.updatedAtEpoch) ? b.updatedAtEpoch : 0;
-    return bRank - aRank;
-  });
-};
+const buildKnownMatchesFromLocalSaves = (saveMap) =>
+  Object.values(saveMap)
+    .map(matchSummaryFromSave)
+    .map((summary) => ({
+      ...summary,
+      updatedAt: formatRelativeTime(summary.updatedAtEpoch),
+    }))
+    .sort((a, b) => b.updatedAtEpoch - a.updatedAtEpoch);
 
 const getMatchNarrative = (matchEntry) => {
   const coord = `Pixel (${matchEntry.pixel.row}, ${matchEntry.pixel.col})`;
   if (matchEntry.status === "claim-open") {
-    return `${coord} claimed by ${matchEntry.claimer}; waiting for a challenger.`;
+    return `${coord} claimed by ${matchEntry.claimer}; waiting for a challenge.`;
   }
   if (matchEntry.status === "live") {
     return `${coord} claimed by ${matchEntry.claimer}, challenged by ${matchEntry.challenger}.`;
@@ -160,13 +92,25 @@ const getMatchNarrative = (matchEntry) => {
 
 const getPrimaryActionLabel = (matchEntry) => {
   if (matchEntry.status === "claim-open") {
-    return "Join Challenge";
+    return "Start Live Game";
   }
   if (matchEntry.status === "live") {
-    return "Watch Live Match";
+    return "Continue Live Game";
   }
-  return "Re-watch Match";
+  return "Replay Completed";
 };
+
+const getLatestFrameForSave = (save) => {
+  const frames = buildReplayFrames(save);
+  return frames[frames.length - 1] ?? createInitialGameState(FIXED_SIZE);
+};
+
+const createLocalMatchId = () => `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+const createLocalPixel = (indexSeed) => ({
+  row: ((indexSeed * 7) % 40) + 1,
+  col: ((indexSeed * 11) % 40) + 1,
+});
 
 const coerceToClassicGame = (rawGame) => {
   const base = createInitialGameState(FIXED_SIZE);
@@ -241,7 +185,7 @@ const loadSession = () => {
     game: createInitialGameState(FIXED_SIZE),
     soundEnabled: true,
     accountHandle: "SpaceCowboy",
-    selectedMatchId: KNOWN_MATCHES[0].id,
+    selectedMatchId: null,
   };
   if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
     return defaultSession;
@@ -257,9 +201,7 @@ const loadSession = () => {
         accountHandle: isNonEmptyString(parsed?.accountHandle)
           ? parsed.accountHandle.trim().slice(0, 24)
           : defaultSession.accountHandle,
-        selectedMatchId: isKnownMatchId(parsed?.selectedMatchId)
-          ? parsed.selectedMatchId
-          : defaultSession.selectedMatchId,
+        selectedMatchId: isMatchId(parsed?.selectedMatchId) ? parsed.selectedMatchId : null,
       };
     }
 
@@ -281,7 +223,7 @@ const loadSession = () => {
       game: coerceToClassicGame(activeLegacyGame),
       soundEnabled: parsedLegacy?.soundEnabled !== false,
       accountHandle: defaultSession.accountHandle,
-      selectedMatchId: defaultSession.selectedMatchId,
+      selectedMatchId: null,
     };
   } catch {
     return defaultSession;
@@ -311,38 +253,53 @@ const App = () => {
   const [localMatchSaves, setLocalMatchSaves] = useState(() => loadLocalMatchSaves());
   const [view, setView] = useState("landing");
   const [arenaMode, setArenaMode] = useState("watch");
-  const [recordingMatchId, setRecordingMatchId] = useState(null);
   const [playbackFrames, setPlaybackFrames] = useState([]);
   const [playbackIndex, setPlaybackIndex] = useState(0);
   const [playbackRunning, setPlaybackRunning] = useState(false);
   const importInputRef = useRef(null);
   const game = session.game;
 
-  const knownMatches = useMemo(() => mergeKnownMatches(localMatchSaves), [localMatchSaves]);
+  const knownMatches = useMemo(() => buildKnownMatchesFromLocalSaves(localMatchSaves), [localMatchSaves]);
   const allowedBoards = useMemo(() => getAllowedBoardIndexes(game), [game]);
   const selectedMatch = useMemo(
     () =>
       knownMatches.find((matchEntry) => matchEntry.id === session.selectedMatchId) ??
-      knownMatches[0],
+      knownMatches[0] ??
+      null,
     [knownMatches, session.selectedMatchId],
   );
-  const selectedMatchNarrative = useMemo(() => getMatchNarrative(selectedMatch), [selectedMatch]);
-  const selectedMatchSave = localMatchSaves[selectedMatch.id] ?? null;
-  const interactionLocked = arenaMode !== "join";
+  const selectedMatchSave = selectedMatch ? localMatchSaves[selectedMatch.id] ?? null : null;
+  const selectedMatchNarrative = selectedMatch ? getMatchNarrative(selectedMatch) : "No local game selected.";
+  const interactionLocked = arenaMode !== "join" || !selectedMatch;
 
   useEffect(() => {
     saveSession(session);
   }, [session]);
 
   useEffect(() => {
-    if (selectedMatch.status === "completed") {
-      setArenaMode("rewatch");
-    } else if (arenaMode === "rewatch") {
+    if (knownMatches.length === 0) {
+      if (session.selectedMatchId !== null) {
+        setSession((current) => ({ ...current, selectedMatchId: null }));
+      }
+      return;
+    }
+    if (!session.selectedMatchId || !knownMatches.some((entry) => entry.id === session.selectedMatchId)) {
+      setSession((current) => ({ ...current, selectedMatchId: knownMatches[0].id }));
+    }
+  }, [knownMatches, session.selectedMatchId]);
+
+  useEffect(() => {
+    if (!selectedMatch) {
       setArenaMode("watch");
-    } else if (arenaMode === "join" && selectedMatch.status !== "claim-open") {
+      return;
+    }
+    if (selectedMatch.status === "completed" && arenaMode === "join") {
+      setArenaMode("rewatch");
+    }
+    if (!selectedMatchSave?.events?.length && arenaMode === "rewatch") {
       setArenaMode("watch");
     }
-  }, [arenaMode, selectedMatch.status]);
+  }, [arenaMode, selectedMatch, selectedMatchSave]);
 
   useEffect(() => {
     if (!playbackRunning || playbackFrames.length === 0) {
@@ -391,31 +348,77 @@ const App = () => {
   }, [allowedBoards, game.currentPlayer, game.isDraw, game.size, game.winner]);
 
   const stageStatusText = useMemo(() => {
+    if (!selectedMatch) {
+      return "Create a local game to begin.";
+    }
     if (arenaMode === "join") {
-      return `Challenge active on pixel (${selectedMatch.pixel.row}, ${selectedMatch.pixel.col}). ${statusText}`;
+      return `Live game on pixel (${selectedMatch.pixel.row}, ${selectedMatch.pixel.col}). ${statusText}`;
     }
     if (arenaMode === "rewatch") {
-      return `Re-watch mode: winner ${selectedMatch.winner ?? "TBD"} on pixel (${selectedMatch.pixel.row}, ${selectedMatch.pixel.col}).`;
+      return `Replay mode for pixel (${selectedMatch.pixel.row}, ${selectedMatch.pixel.col}).`;
     }
-    return `Spectating ${selectedMatch.id} on pixel (${selectedMatch.pixel.row}, ${selectedMatch.pixel.col}).`;
-  }, [
-    arenaMode,
-    selectedMatch.id,
-    selectedMatch.pixel.col,
-    selectedMatch.pixel.row,
-    selectedMatch.winner,
-    statusText,
-  ]);
+    return `Watching latest saved state for ${selectedMatch.id}.`;
+  }, [arenaMode, selectedMatch, statusText]);
 
   const upsertAndTrackSave = (save) => {
     const nextMap = upsertLocalMatchSave(save);
     setLocalMatchSaves(nextMap);
   };
 
-  const startRecordingForSelectedMatch = () => {
+  const stopPlayback = () => {
+    setPlaybackRunning(false);
+    setPlaybackFrames([]);
+    setPlaybackIndex(0);
+  };
+
+  const handleCreateLocalGame = () => {
+    stopPlayback();
+    const matchNumber = knownMatches.length + 1;
+    const matchId = createLocalMatchId();
+    const save = createMatchSave({
+      matchId,
+      matchTitle: `Local Match #${matchNumber}`,
+      pixel: createLocalPixel(matchNumber),
+      claimer: session.accountHandle,
+      challenger: null,
+      account: createDynamicAccountIdentity({ handle: session.accountHandle }),
+    });
+    upsertAndTrackSave(save);
+    setArenaMode("watch");
+    setSession((current) => ({
+      ...current,
+      selectedMatchId: matchId,
+      game: createInitialGameState(FIXED_SIZE),
+    }));
+  };
+
+  const handleLoadSelectedLatest = () => {
+    if (!selectedMatchSave) {
+      playInvalidSfx(session.soundEnabled);
+      return;
+    }
+    stopPlayback();
+    setArenaMode(selectedMatch.status === "completed" ? "rewatch" : "watch");
+    setSession((current) => ({
+      ...current,
+      game: getLatestFrameForSave(selectedMatchSave),
+    }));
+  };
+
+  const handleStartOrContinue = () => {
+    if (!selectedMatch) {
+      playInvalidSfx(session.soundEnabled);
+      return;
+    }
+    if (selectedMatch.status === "completed") {
+      handleReplaySelectedSave();
+      return;
+    }
+
+    stopPlayback();
     const account = createDynamicAccountIdentity({ handle: session.accountHandle });
     const baselineSave =
-      localMatchSaves[selectedMatch.id] ??
+      selectedMatchSave ??
       createMatchSave({
         matchId: selectedMatch.id,
         matchTitle: selectedMatch.title,
@@ -424,7 +427,6 @@ const App = () => {
         challenger: session.accountHandle,
         account,
       });
-
     const nextSave = {
       ...baselineSave,
       players: {
@@ -434,12 +436,21 @@ const App = () => {
       account,
       updatedAt: Date.now(),
     };
-
     upsertAndTrackSave(nextSave);
-    setRecordingMatchId(selectedMatch.id);
+
+    setArenaMode("join");
+    setSession((current) => ({
+      ...current,
+      game: getLatestFrameForSave(nextSave),
+    }));
   };
 
   const handleCellClick = (boardIndex, cellIndex) => {
+    if (!selectedMatch) {
+      playInvalidSfx(session.soundEnabled);
+      return;
+    }
+
     const nextGame = makeMove(game, boardIndex, cellIndex);
     if (nextGame === game) {
       playInvalidSfx(session.soundEnabled);
@@ -470,31 +481,33 @@ const App = () => {
       playInterTurnSfx(session.soundEnabled);
     }
 
-    if (arenaMode === "join" && recordingMatchId === selectedMatch.id) {
-      const existingSave =
-        localMatchSaves[selectedMatch.id] ??
-        createMatchSave({
-          matchId: selectedMatch.id,
-          matchTitle: selectedMatch.title,
-          pixel: selectedMatch.pixel,
-          claimer: selectedMatch.claimer,
-          challenger: session.accountHandle,
-          account: createDynamicAccountIdentity({ handle: session.accountHandle }),
-        });
-      const moveEvent = createMoveEvent({
-        boardIndex,
-        cellIndex,
-        player: game.currentPlayer,
-        accountHandle: session.accountHandle,
+    const activeSave =
+      localMatchSaves[selectedMatch.id] ??
+      createMatchSave({
+        matchId: selectedMatch.id,
+        matchTitle: selectedMatch.title,
+        pixel: selectedMatch.pixel,
+        claimer: selectedMatch.claimer,
+        challenger: session.accountHandle,
+        account: createDynamicAccountIdentity({ handle: session.accountHandle }),
       });
-      const updatedSave = appendMoveToSave(existingSave, moveEvent, nextGame);
-      upsertAndTrackSave(updatedSave);
-    }
+    const moveEvent = createMoveEvent({
+      boardIndex,
+      cellIndex,
+      player: game.currentPlayer,
+      accountHandle: session.accountHandle,
+    });
+    const updatedSave = appendMoveToSave(activeSave, moveEvent, nextGame);
+    upsertAndTrackSave(updatedSave);
 
     setSession((current) => ({
       ...current,
       game: nextGame,
     }));
+
+    if (updatedSave.result) {
+      setArenaMode("watch");
+    }
   };
 
   const handleStageCellClick = (boardIndex, cellIndex) => {
@@ -505,10 +518,21 @@ const App = () => {
     handleCellClick(boardIndex, cellIndex);
   };
 
-  const handleRestart = () => {
-    setPlaybackRunning(false);
-    setPlaybackFrames([]);
-    setPlaybackIndex(0);
+  const handleRestartCurrentGame = () => {
+    if (!selectedMatch || arenaMode !== "join") {
+      playInvalidSfx(session.soundEnabled);
+      return;
+    }
+    stopPlayback();
+    const resetSave = createMatchSave({
+      matchId: selectedMatch.id,
+      matchTitle: selectedMatch.title,
+      pixel: selectedMatch.pixel,
+      claimer: selectedMatch.claimer,
+      challenger: session.accountHandle,
+      account: createDynamicAccountIdentity({ handle: session.accountHandle }),
+    });
+    upsertAndTrackSave(resetSave);
     setSession((current) => ({
       ...current,
       game: createInitialGameState(FIXED_SIZE),
@@ -516,42 +540,18 @@ const App = () => {
   };
 
   const handleSelectKnownMatch = (matchId) => {
-    const nextMatch =
-      knownMatches.find((matchEntry) => matchEntry.id === matchId) ?? knownMatches[0];
-    setPlaybackRunning(false);
-    setPlaybackFrames([]);
-    setPlaybackIndex(0);
+    const nextMatch = knownMatches.find((matchEntry) => matchEntry.id === matchId);
+    if (!nextMatch) {
+      return;
+    }
+    stopPlayback();
+    const nextSave = localMatchSaves[nextMatch.id] ?? null;
+    setArenaMode(nextMatch.status === "completed" ? "rewatch" : "watch");
     setSession((current) => ({
       ...current,
       selectedMatchId: nextMatch.id,
+      game: nextSave ? getLatestFrameForSave(nextSave) : createInitialGameState(FIXED_SIZE),
     }));
-
-    if (nextMatch.status === "completed") {
-      setArenaMode("rewatch");
-      return;
-    }
-    setArenaMode("watch");
-  };
-
-  const handlePrimaryAction = () => {
-    setPlaybackRunning(false);
-    setPlaybackFrames([]);
-    setPlaybackIndex(0);
-
-    if (selectedMatch.status === "claim-open") {
-      setArenaMode("join");
-      startRecordingForSelectedMatch();
-      setSession((current) => ({
-        ...current,
-        game: createInitialGameState(FIXED_SIZE),
-      }));
-      return;
-    }
-    if (selectedMatch.status === "completed") {
-      setArenaMode("rewatch");
-      return;
-    }
-    setArenaMode("watch");
   };
 
   const handleReplaySelectedSave = () => {
@@ -571,7 +571,7 @@ const App = () => {
   };
 
   const handleExportSelectedSave = () => {
-    if (!selectedMatchSave) {
+    if (!selectedMatchSave || !selectedMatch) {
       playInvalidSfx(session.soundEnabled);
       return;
     }
@@ -595,15 +595,24 @@ const App = () => {
       const parsedSave = parseMatchSave(fileContents);
       const nextMap = upsertLocalMatchSave(parsedSave);
       setLocalMatchSaves(nextMap);
+      stopPlayback();
+      setArenaMode(parsedSave.result ? "rewatch" : "watch");
       setSession((current) => ({
         ...current,
         selectedMatchId: parsedSave.matchId,
+        game: getLatestFrameForSave(parsedSave),
       }));
     } catch {
       playInvalidSfx(session.soundEnabled);
     } finally {
       event.target.value = "";
     }
+  };
+
+  const handleReloadLocalSaves = () => {
+    const reloaded = loadLocalMatchSaves();
+    setLocalMatchSaves(reloaded);
+    playInterTurnSfx(session.soundEnabled);
   };
 
   return (
@@ -623,21 +632,21 @@ const App = () => {
           <p className="badge-line">Arcade Protocol // 2070</p>
           <h1>Nebula Showdown Grid</h1>
           <p>
-            Boot into the arcade hub, browse known SuperTicTacToe games, then watch, join, or
-            re-watch matches tied to pixel coordinates in the global map.
+            Create and play local SuperTicTacToe games, then test save/load/reload flows with live
+            watch and completed replay.
           </p>
           <div className="landing-flow">
             <div>
-              <h2>1. Enter Lobby</h2>
-              <p>Open your account panel and match roster.</p>
+              <h2>1. Create Local Game</h2>
+              <p>No seeded/fake matches; your list starts empty.</p>
             </div>
             <div>
-              <h2>2. Pick Known Match</h2>
-              <p>Each game points to one pixel coordinate claim.</p>
+              <h2>2. Play + Save Events</h2>
+              <p>Every move is appended into a local match save log.</p>
             </div>
             <div>
-              <h2>3. Watch / Join / Re-watch</h2>
-              <p>Local saves use event logs so playback remains natural.</p>
+              <h2>3. Load / Watch / Replay</h2>
+              <p>Load latest game state or replay from move zero.</p>
             </div>
           </div>
           <div className="launch-row">
@@ -673,29 +682,40 @@ const App = () => {
             </article>
 
             <article className="card games-card">
-              <h2>Known SuperTicTacToe Games</h2>
-              <ul className="known-games-list">
-                {knownMatches.map((matchEntry) => (
-                  <li key={matchEntry.id}>
-                    <button
-                      type="button"
-                      className={session.selectedMatchId === matchEntry.id ? "is-active" : ""}
-                      onClick={() => handleSelectKnownMatch(matchEntry.id)}
-                    >
-                      <span>{matchEntry.title}</span>
-                      <small>{MATCH_STATUS_LABEL[matchEntry.status]}</small>
-                    </button>
-                    <p className="match-meta-line">{getMatchNarrative(matchEntry)}</p>
-                    <p className="match-meta-line">
-                      Updated: {matchEntry.updatedAt}
-                      {matchEntry.hasLocalSave ? " • local replay ready" : ""}
-                    </p>
-                  </li>
-                ))}
-              </ul>
+              <h2>Local SuperTicTacToe Games</h2>
+              <div className="save-action-row">
+                <button type="button" className="secondary" onClick={handleCreateLocalGame}>
+                  Create New Local Game
+                </button>
+                <button type="button" className="secondary alt" onClick={handleReloadLocalSaves}>
+                  Reload Local Saves
+                </button>
+              </div>
+
+              {knownMatches.length === 0 ? (
+                <p className="match-meta-line">No local games yet. Create one to begin testing.</p>
+              ) : (
+                <ul className="known-games-list">
+                  {knownMatches.map((matchEntry) => (
+                    <li key={matchEntry.id}>
+                      <button
+                        type="button"
+                        className={session.selectedMatchId === matchEntry.id ? "is-active" : ""}
+                        onClick={() => handleSelectKnownMatch(matchEntry.id)}
+                      >
+                        <span>{matchEntry.title}</span>
+                        <small>{MATCH_STATUS_LABEL[matchEntry.status]}</small>
+                      </button>
+                      <p className="match-meta-line">{getMatchNarrative(matchEntry)}</p>
+                      <p className="match-meta-line">Updated: {matchEntry.updatedAt}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
               <div className="save-action-row">
                 <button type="button" className="secondary" onClick={handleExportSelectedSave}>
-                  Export Save JSON
+                  Export Selected Save JSON
                 </button>
                 <button
                   type="button"
@@ -720,35 +740,44 @@ const App = () => {
 
           <section className="game-stage card">
             <header className="stage-header">
-              <h2>{selectedMatch.title}</h2>
+              <h2>{selectedMatch ? selectedMatch.title : "No Local Game Selected"}</h2>
               <p>{selectedMatchNarrative}</p>
-              <div className="stage-action-row">
-                <button
-                  type="button"
-                  className="primary-match-action"
-                  onClick={handlePrimaryAction}
-                >
-                  {getPrimaryActionLabel(selectedMatch)}
-                </button>
-                <button
-                  type="button"
-                  className="primary-match-action alt"
-                  onClick={handleReplaySelectedSave}
-                >
-                  Play Saved Replay
-                </button>
-                <span className="status-pill">{MATCH_STATUS_LABEL[selectedMatch.status]}</span>
-              </div>
+              {selectedMatch ? (
+                <div className="stage-action-row">
+                  <button
+                    type="button"
+                    className="primary-match-action"
+                    onClick={handleStartOrContinue}
+                  >
+                    {getPrimaryActionLabel(selectedMatch)}
+                  </button>
+                  <button
+                    type="button"
+                    className="primary-match-action alt"
+                    onClick={handleLoadSelectedLatest}
+                  >
+                    Watch Live Snapshot
+                  </button>
+                  <button
+                    type="button"
+                    className="primary-match-action alt"
+                    onClick={handleReplaySelectedSave}
+                  >
+                    Replay From Save
+                  </button>
+                  <span className="status-pill">{MATCH_STATUS_LABEL[selectedMatch.status]}</span>
+                </div>
+              ) : null}
             </header>
 
             <div className="game-hud">
               <p className="status-line">{stageStatusText}</p>
               <p className="meta-line">Classic mode: 9 local boards • Moves: {game.moveCount}</p>
               {interactionLocked ? (
-                <p className="stage-note">Board input is locked while watching/re-watching.</p>
+                <p className="stage-note">Board input is locked while watching/replaying.</p>
               ) : (
                 <p className="stage-note">
-                  Challenge mode active: event log is recording this match.
+                  Live mode active: moves are being saved to local match history.
                 </p>
               )}
               {playbackRunning ? (
@@ -759,8 +788,8 @@ const App = () => {
             <Board3D game={game} onCellClick={handleStageCellClick} />
 
             <div className="control-strip">
-              <button type="button" onClick={handleRestart} disabled={interactionLocked}>
-                New Game
+              <button type="button" onClick={handleRestartCurrentGame} disabled={interactionLocked}>
+                Reset Current Live Game
               </button>
               <button
                 type="button"
